@@ -75,14 +75,33 @@ map<string, string> bibleVerses;
 // Look up one or more verses for a reference like "Romans 8:9" or "Romans 8:9-10"
 // Returns the verse text, or empty string on failure. Writes errors to stderr.
 string lookupVerses(const string& reference, bool verseNumbers = false) {
-    // Check for a verse range (e.g. "Romans 8:9-10")
+    // Check for a verse range (e.g. "Romans 8:9-10" or "Romans 8:20-")
     size_t colon = reference.rfind(':');
     if (colon != string::npos) {
         size_t dash = reference.find('-', colon);
         if (dash != string::npos) {
             string bookChapter = reference.substr(0, colon + 1); // "Romans 8:"
             int startVerse = stoi(reference.substr(colon + 1, dash - colon - 1));
-            int endVerse   = stoi(reference.substr(dash + 1));
+
+            // Determine end verse: find last verse in chapter if nothing follows the dash
+            int endVerse;
+            string afterDash = reference.substr(dash + 1);
+            if (afterDash.empty()) {
+                endVerse = 0;
+                for (const auto& entry : bibleVerses) {
+                    if (entry.first.compare(0, bookChapter.size(), bookChapter) == 0) {
+                        int v = stoi(entry.first.substr(bookChapter.size()));
+                        if (v > endVerse) endVerse = v;
+                    }
+                }
+                if (endVerse == 0) {
+                    cerr << "Warning: no verses found for chapter in '" << reference << "'." << endl;
+                    return "";
+                }
+            } else {
+                endVerse = stoi(afterDash);
+            }
+
             string combined;
             bool anyMissing = false;
             for (int v = startVerse; v <= endVerse; ++v) {
@@ -195,6 +214,7 @@ void printHelp() {
     cout << "  -tn=NAME                Set tract name (default: 'The Romans Road')" << endl;
     cout << "  --tractname=NAME        Specify tract presentation by name" << endl;
     cout << "  --ref=REF                Output a Bible reference directly (use comma to separate multiple)" << endl;
+    cout << "                           REF formats: Book Ch:V  Book Ch:V-V  Book Ch:V-  Book Ch" << endl;
     cout << "  --refstyle=STYLE         Citation style: 1=new line (default), 2=inline" << endl;
     cout << "  --versenumbers, -vn      Prefix each verse with its verse number, e.g. [1]" << endl;
     cout << "\nExamples:" << endl;
@@ -204,6 +224,7 @@ void printHelp() {
     cout << "  gospel -tn=\"The Romans Road\" -bv=KJV              Display Romans Road in KJV" << endl;
     cout << "  gospel --ref=\"John 3:16\"                          Display a single verse" << endl;
     cout << "  gospel --ref=\"John 3:16,Romans 8:9-10\"           Display multiple verses" << endl;
+    cout << "  gospel --ref=\"Romans 8:20-\"                       Display verse 20 to end of chapter" << endl;
     cout << "  gospel --ref=\"Romans 8\" -vn                       Display a full chapter with verse numbers" << endl;
 }
 int main(int argc, char* argv[]) {
