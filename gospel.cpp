@@ -43,6 +43,39 @@
 using namespace std;
 
 const string VERSION = "1.1";
+const string CONFIG_FILE = ".gospel";
+
+// ── Config file (.gospel in current directory) ────────────────────────────────
+
+// Read key=value pairs from CONFIG_FILE. Lines starting with # are comments.
+map<string, string> loadConfig() {
+    map<string, string> cfg;
+    ifstream f(CONFIG_FILE);
+    if (!f.good()) return cfg;
+    string line;
+    while (getline(f, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        size_t s = line.find_first_not_of(" \t");
+        if (s == string::npos || line[s] == '#') continue;
+        line = line.substr(s);
+        size_t eq = line.find('=');
+        if (eq == string::npos) continue;
+        string key = line.substr(0, eq);
+        string val = line.substr(eq + 1);
+        size_t ke = key.find_last_not_of(" \t");
+        if (ke != string::npos) key = key.substr(0, ke + 1);
+        size_t vs = val.find_first_not_of(" \t");
+        val = (vs != string::npos) ? val.substr(vs) : "";
+        if (!key.empty()) cfg[key] = val;
+    }
+    return cfg;
+}
+
+// Return cfg[key] if present, otherwise defaultVal.
+string cfgGet(const map<string, string>& cfg, const string& key, const string& defaultVal) {
+    auto it = cfg.find(key);
+    return (it != cfg.end()) ? it->second : defaultVal;
+}
 
 struct Section {
     string section_title;
@@ -327,6 +360,10 @@ void printHelp() {
     cout << "  --versequotes            Wrap each Bible verse in curly quotes" << endl;
     cout << "  --chapterheader, -ch     Print book and chapter as a header when outputting a full chapter" << endl;
     cout << "  --print                  Send PDF to printer after generating (requires --output=.pdf)" << endl;
+    cout << "\nConfig file (.gospel in current directory):" << endl;
+    cout << "  --saveconfig             Save current settings to .gospel as new defaults" << endl;
+    cout << "  --showconfig             Print current effective settings and exit" << endl;
+    cout << "  Supported keys:  bv  tractname  refstyle  pdfmargin  pdffont  pdffontsize  outputtype" << endl;
     cout << "\nExamples:" << endl;
     cout << "  gospel --outputtype=md                            Display tract output as markdown" << endl;
     cout << "  gospel                                            Display default tract in KJV" << endl;
@@ -343,27 +380,36 @@ int main(int argc, char* argv[]) {
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
 #endif
-    string version = "KJV";
-    string tractName = "The Romans Road"; // Default tract
-    string outputType = "plaintext";
+
+    // ── Load config file first; command-line args override these values ───
+    map<string, string> cfg = loadConfig();
+
+#ifdef __APPLE__
+    const string defaultPdfFont = "Palatino";
+#elif defined(_WIN32)
+    const string defaultPdfFont = "Palatino Linotype";
+#else
+    const string defaultPdfFont = "";
+#endif
+
+    string version   = cfgGet(cfg, "bv",          "KJV");
+    string tractName = cfgGet(cfg, "tractname",    "The Romans Road");
+    string outputType= cfgGet(cfg, "outputtype",   "plaintext");
+    string pdfMargin = cfgGet(cfg, "pdfmargin",    "0.5in");
+    string pdfFont   = cfgGet(cfg, "pdffont",      defaultPdfFont);
+    int pdfFontSizePct = stoi(cfgGet(cfg, "pdffontsize", "100"));
+    int refStyle     = stoi(cfgGet(cfg, "refstyle", "1"));
+
     string refArg;
     string outputFile;
-    string pdfMargin = "0.5in";
-#ifdef __APPLE__
-    string pdfFont = "Palatino";
-#elif defined(_WIN32)
-    string pdfFont = "Palatino Linotype";
-#else
-    string pdfFont;
-#endif
-    int pdfFontSizePct = 100;
-    int refStyle = 1;
     bool verseNumbers = false;
     bool verseNewline = false;
     bool italic = false;
     bool printPdf = false;
     bool verseQuotes = false;
     bool chapterHeader = false;
+    bool saveConfig = false;
+    bool showConfig = false;
 
     // Parse command-line arguments
     for(int i = 1; i < argc; ++i) {
@@ -441,13 +487,54 @@ int main(int argc, char* argv[]) {
             chapterHeader = true;
         } else if (arg == "--print") {
             printPdf = true;
+        } else if (arg == "--saveconfig") {
+            saveConfig = true;
+        } else if (arg == "--showconfig") {
+            showConfig = true;
         } else if (arg.find("-") == 0) {
             cerr << "Error: unknown option '" << arg << "'" << endl;
             cerr << "Run 'gospel --help' for usage." << endl;
             return 1;
         }
     }
-    
+
+    // ── --showconfig: print effective settings and exit ───────────────────
+    if (showConfig) {
+        cout << "Effective settings (config file + command-line):" << endl;
+        cout << "  bv           = " << version       << endl;
+        cout << "  tractname    = " << tractName      << endl;
+        cout << "  refstyle     = " << refStyle       << endl;
+        cout << "  outputtype   = " << outputType     << endl;
+        cout << "  pdfmargin    = " << pdfMargin      << endl;
+        cout << "  pdffont      = " << pdfFont        << endl;
+        cout << "  pdffontsize  = " << pdfFontSizePct << endl;
+        ifstream check(CONFIG_FILE);
+        if (check.good())
+            cout << "\nConfig file: ./" << CONFIG_FILE << " (loaded)" << endl;
+        else
+            cout << "\nConfig file: ./" << CONFIG_FILE << " (not found — using defaults)" << endl;
+        return 0;
+    }
+
+    // ── --saveconfig: write current settings to .gospel and exit ──────────
+    if (saveConfig) {
+        ofstream f(CONFIG_FILE);
+        if (!f) {
+            cerr << "Error: could not write '" << CONFIG_FILE << "'." << endl;
+            return 1;
+        }
+        f << "# gospel configuration — generated by gospel --saveconfig\n";
+        f << "bv          = " << version       << "\n";
+        f << "tractname   = " << tractName      << "\n";
+        f << "refstyle    = " << refStyle       << "\n";
+        f << "outputtype  = " << outputType     << "\n";
+        f << "pdfmargin   = " << pdfMargin      << "\n";
+        f << "pdffont     = " << pdfFont        << "\n";
+        f << "pdffontsize = " << pdfFontSizePct << "\n";
+        cerr << "Saved defaults to ./" << CONFIG_FILE << endl;
+        return 0;
+    }
+
     // Normalize version to uppercase for comparison
     transform(version.begin(), version.end(), version.begin(), ::toupper);
 
