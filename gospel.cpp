@@ -34,6 +34,11 @@
 #include <fstream>
 #include <sstream>
 #include <cstdio>
+#ifdef _WIN32
+#include <windows.h>
+#define popen  _popen
+#define pclose _pclose
+#endif
 
 using namespace std;
 
@@ -335,6 +340,9 @@ void printHelp() {
     cout << "  gospel --ref=\"John 3:16\" --output=verse.pdf       Save verse as PDF (requires pandoc)" << endl;
 }
 int main(int argc, char* argv[]) {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+#endif
     string version = "KJV";
     string tractName = "The Romans Road"; // Default tract
     string outputType = "plaintext";
@@ -343,6 +351,8 @@ int main(int argc, char* argv[]) {
     string pdfMargin = "0.5in";
 #ifdef __APPLE__
     string pdfFont = "Palatino";
+#elif defined(_WIN32)
+    string pdfFont = "Palatino Linotype";
 #else
     string pdfFont;
 #endif
@@ -595,11 +605,16 @@ int main(int argc, char* argv[]) {
     } else if (isPdf) {
         // Write markdown to a temp file then convert via pandoc
         string tmpFile = outputFile + ".tmp.md";
-        ofstream tmp(tmpFile);
+        ofstream tmp(tmpFile, ios::binary);
         if (!tmp) {
             cerr << "Error: could not create temporary file '" << tmpFile << "'." << endl;
             return 1;
         }
+        // Write UTF-8 BOM so pandoc correctly identifies the encoding.
+        // Without this, MSVC-compiled builds (execution charset = Windows-1252
+        // unless /utf-8 is passed) produce non-UTF-8 bytes that pandoc
+        // misidentifies, causing missing-character warnings in xelatex.
+        tmp.write("\xEF\xBB\xBF", 3);
         tmp << out.str();
         tmp.close();
 
@@ -650,10 +665,11 @@ int main(int argc, char* argv[]) {
             cerr << endl;
             cerr << "PDF generation requires pandoc and a LaTeX engine." << endl;
             cerr << "Install both with:" << endl;
-            cerr << "  macOS:  brew install pandoc && brew install --cask basictex" << endl;
-            cerr << "  Linux:  apt install pandoc texlive" << endl;
+            cerr << "  macOS:   brew install pandoc && brew install --cask basictex" << endl;
+            cerr << "  Linux:   apt install pandoc texlive" << endl;
+            cerr << "  Windows: winget install pandoc && winget install MiKTeX.MiKTeX" << endl;
             cerr << endl;
-            cerr << "After installing basictex, run: sudo tlmgr update --self" << endl;
+            cerr << "After installing basictex (macOS), run: sudo tlmgr update --self" << endl;
             cerr << "Then open a new Terminal window — pdflatex is not found in existing sessions." << endl;
             cerr << "Or generate markdown and convert manually:" << endl;
             cerr << "  gospel --outputtype=md | pandoc -f markdown -o " << outputFile << endl;
@@ -661,6 +677,17 @@ int main(int argc, char* argv[]) {
         }
         cerr << "Saved to " << outputFile << endl;
         if (printPdf) {
+#ifdef _WIN32
+            string printCmd = "powershell -Command \"Start-Process -FilePath '" +
+                              outputFile + "' -Verb Print -Wait\"";
+            int printRet = system(printCmd.c_str());
+            if (printRet != 0) {
+                cerr << "Warning: print command failed." << endl;
+                cerr << "Make sure a PDF viewer that supports the Print verb is installed." << endl;
+            } else {
+                cerr << "Sent to printer." << endl;
+            }
+#else
             // Find the first available printer to avoid stale ~/.cups/lpoptions issues
             FILE* pipe = popen("lpstat -p 2>/dev/null | awk '/^printer/ {print $2; exit}'", "r");
             string printer;
@@ -691,6 +718,7 @@ int main(int argc, char* argv[]) {
                 else
                     cerr << "Sent to printer." << endl;
             }
+#endif
         }
     } else {
         ofstream f(outputFile);

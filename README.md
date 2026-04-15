@@ -30,8 +30,19 @@ A C++ program that displays various gospel presentation tracts, biblical framewo
 
 ## Building
 
+**macOS / Linux:**
 ```bash
 g++ -std=c++11 -o gospel gospel.cpp
+```
+
+**Windows (MSVC):**
+```bat
+cl /EHsc /std:c++17 /utf-8 gospel.cpp /Fe:gospel.exe
+```
+
+**Windows (MinGW / MSYS2):**
+```bash
+g++ -std=c++11 -o gospel.exe gospel.cpp
 ```
 
 ## Usage
@@ -190,11 +201,15 @@ Print the PDF directly after generating:
 ```
 
 To set or fix the default printer:
+
+**macOS / Linux:**
 ```bash
 lpoptions -d YourPrinterName   # set default printer
 lpstat -p                      # list available printers
 rm ~/.cups/lpoptions           # clear stale printer config if lpr errors occur
 ```
+
+**Windows:** printing uses PowerShell `Start-Process -Verb Print` with your default PDF viewer.
 
 Control the PDF margin (default is `0.5in`):
 ```bash
@@ -215,11 +230,13 @@ Color specific words or phrases in PDF output using HTML span tags in the tract 
 ```
 Colors are converted to LaTeX `\textcolor` automatically when generating a PDF.
 
-Set a custom PDF font (default is `Palatino` on macOS, requires xelatex):
+Set a custom PDF font (requires xelatex):
 ```bash
 ./gospel --output=romansroad.pdf --pdffont="Georgia"
 ./gospel --output=romansroad.pdf --pdffont="Times New Roman"
 ```
+
+Default fonts by platform: `Palatino` (macOS), `Palatino Linotype` (Windows), none/system default (Linux).
 
 > **Linux note:** Palatino is not installed by default on Linux. The closest available equivalent included with texlive is `TeX Gyre Pagella`:
 > ```bash
@@ -228,7 +245,11 @@ Set a custom PDF font (default is `Palatino` on macOS, requires xelatex):
 
 Install xelatex if needed:
 ```bash
+# macOS / Linux
 sudo tlmgr install xetex
+
+# Windows
+winget install MiKTeX.MiKTeX   # includes xelatex
 ```
 
 If pandoc or a LaTeX engine is not installed the program will tell you how to install them and show the manual alternative:
@@ -244,9 +265,15 @@ sudo tlmgr update --self
 
 # Linux
 apt install pandoc texlive
+
+# Windows
+winget install JohnMacFarlane.Pandoc
+winget install MiKTeX.MiKTeX
 ```
 
 > **macOS note:** After installing basictex, open a new Terminal window before running gospel. The `pdflatex` command is added to your PATH at login and will not be found in an existing Terminal session.
+
+> **Windows note:** `curl` is built into Windows 10 and later and is used to download Bible translation files automatically. On Windows, `--print` uses PowerShell to send the PDF to your default printer.
 
 ## Copying Output
 
@@ -262,6 +289,11 @@ The program output can be easily copied to the clipboard using piping:
 ./gospel | xclip -selection clipboard
 # or
 ./gospel | xsel -b
+```
+
+**Windows:**
+```bat
+gospel | clip
 ```
 
 This is useful for sharing gospel presentations or copying the content for use in documents, emails, or other applications.
@@ -285,6 +317,9 @@ If a Bible translation file is not found, the program will prompt you to downloa
 
 - C++11 or later
 - Standard C++ library
-- `curl` (for automatic Bible file download)
-- `pandoc` + `basictex` (for PDF output)
+- `curl` (for automatic Bible file download — built into Windows 10+)
+- `pandoc` + a LaTeX engine (for PDF output):
+  - macOS: `basictex` via Homebrew
+  - Linux: `texlive` via apt
+  - Windows: `MiKTeX` via winget
 - `xelatex` / `xetex` (for custom PDF fonts via `--pdffont=`)
