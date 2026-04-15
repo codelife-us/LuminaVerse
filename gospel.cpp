@@ -114,7 +114,7 @@ map<string, string> bibleVerses;
 
 // Look up one or more verses for a reference like "Romans 8:9" or "Romans 8:9-10"
 // Returns the verse text, or empty string on failure. Writes errors to stderr.
-string lookupVerses(const string& reference, bool verseNumbers = false, bool verseNewline = false) {
+string lookupVerses(const string& reference, bool verseNumbers = false, bool verseNewline = false, bool markdown = false) {
     // Check for a verse range (e.g. "Romans 8:9-10" or "Romans 8:20-")
     size_t colon = reference.rfind(':');
     if (colon != string::npos) {
@@ -148,7 +148,7 @@ string lookupVerses(const string& reference, bool verseNumbers = false, bool ver
                 string key = bookChapter + to_string(v);
                 auto it = bibleVerses.find(key);
                 if (it != bibleVerses.end()) {
-                    if (!combined.empty()) combined += verseNewline ? "\n" : " ";
+                    if (!combined.empty()) combined += verseNewline ? (markdown ? "  \n" : "\n") : " ";
                     if (verseNumbers) combined += "[" + to_string(v) + "] ";
                     combined += it->second;
                 } else {
@@ -180,7 +180,7 @@ string lookupVerses(const string& reference, bool verseNumbers = false, bool ver
         }
         string combined;
         for (const auto& v : chapterVerses) {
-            if (!combined.empty()) combined += verseNewline ? "\n" : " ";
+            if (!combined.empty()) combined += verseNewline ? (markdown ? "  \n" : "\n") : " ";
             if (verseNumbers) combined += "[" + to_string(v.first) + "] ";
             combined += v.second;
         }
@@ -280,7 +280,7 @@ string processMarkdownReferences(const string& text, const string& version, bool
     while (regex_search(searchStart, text.cend(), match, refPattern)) {
         string reference = match[1].str();
 
-        string verseText = lookupVerses(reference, verseNumbers, verseNewline);
+        string verseText = lookupVerses(reference, verseNumbers, verseNewline, markdown);
         if (!verseText.empty()) {
             string replacement = formatCitation(verseText, reference, version, markdown, refStyle, true, verseQuotes);
 
@@ -488,7 +488,9 @@ int main(int argc, char* argv[]) {
     // PDF output always requires markdown as the intermediate format
     bool isPdf = outputFile.size() >= 4 &&
                  outputFile.substr(outputFile.size() - 4) == ".pdf";
-    bool markdown = isPdf || (outputType == "md" || outputType == "MD");
+    bool isMd = outputFile.size() >= 3 &&
+                outputFile.substr(outputFile.size() - 3) == ".md";
+    bool markdown = isPdf || isMd || (outputType == "md" || outputType == "MD");
 
     // Capture all output into a string so we can route it to stdout or a file
     ostringstream out;
@@ -528,7 +530,7 @@ int main(int argc, char* argv[]) {
                     lastBook = token.substr(0, bookEnd);
             }
 
-            string verseText = lookupVerses(token, verseNumbers, verseNewline);
+            string verseText = lookupVerses(token, verseNumbers, verseNewline, markdown);
             if (!verseText.empty()) {
                 if (chapterHeader && token.find(':') == string::npos)
                     out << (markdown ? "## " : "") << token << "\n\n";
