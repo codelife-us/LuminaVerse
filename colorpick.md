@@ -13,11 +13,23 @@ An interactive terminal color picker. Navigate a hue × saturation grid with arr
 
 ## Building
 
+**macOS / Linux (g++):**
 ```bash
 g++ -std=c++11 -o colorpick colorpick.cpp
 ```
 
+**Windows (MSVC — run in Developer Command Prompt):**
+```bat
+cl /EHsc /std:c++17 colorpick.cpp /Fe:colorpick.exe
+```
+
 ## Usage
+
+Print version:
+```bash
+colorpick --version
+colorpick -v
+```
 
 Run interactively:
 ```bash

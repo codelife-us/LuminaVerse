@@ -46,6 +46,8 @@
 
 using namespace std;
 
+const string COLORPICK_VERSION = "1.2";
+
 // ── HSV → RGB ─────────────────────────────────────────────────────────────────
 
 struct RGB { int r, g, b; };
@@ -231,7 +233,15 @@ void drawPreview(int hueIdx, int satIdx, double val) {
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 
-int main() {
+int main(int argc, char* argv[]) {
+    for (int i = 1; i < argc; ++i) {
+        string a = argv[i];
+        if (a == "--version" || a == "-v") {
+            printf("colorpick v%s\n", COLORPICK_VERSION.c_str());
+            return 0;
+        }
+    }
+
     termInit();
 
     // Title row
