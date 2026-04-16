@@ -161,6 +161,28 @@ string refToFilename(const string& ref) {
     return s + ".jpg";
 }
 
+// Wraps s in single quotes, escaping any embedded single quotes.
+string shellQuote(const string& s) {
+    string r = "'";
+    for (char c : s) {
+        if (c == '\'') r += "'\\''";
+        else r += c;
+    }
+    return r + "'";
+}
+
+// Returns "magick" if available, "convert" if not, or "" if neither found.
+string detectIM() {
+#ifdef _WIN32
+    if (system("magick -version >NUL 2>&1") == 0) return "magick";
+    if (system("convert -version >NUL 2>&1") == 0) return "convert";
+#else
+    if (system("magick -version >/dev/null 2>&1") == 0) return "magick";
+    if (system("convert -version >/dev/null 2>&1") == 0) return "convert";
+#endif
+    return "";
+}
+
 void printHelp() {
     cout << "bvi v" << BVI_VERSION << "\n\n";
     cout << "Usage: bvi \"Reference\" [OPTIONS]\n\n";
@@ -198,6 +220,8 @@ int main(int argc, char* argv[]) {
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
 #endif
+
+    string im = detectIM();
 
     // ── Load config file first; command-line args override these values ───
     map<string, string> cfg = loadConfig();
@@ -383,21 +407,8 @@ int main(int argc, char* argv[]) {
     // Citation line, e.g. "— Philippians 4:6-7 (KJV)"
     string citation = "\xe2\x80\x94 " + reference + " (" + version + ")";
 
-    // ── Write temp files to avoid shell-escaping issues ───────────────────
-    // ImageMagick reads text content from a file when the argument is "@path".
-    string tmpVerse = outputFile + ".tmp_verse.txt";
-    string tmpCite  = outputFile + ".tmp_cite.txt";
-
-    {
-        ofstream f(tmpVerse);
-        if (!f) { cerr << "Error: could not write temp file '" << tmpVerse << "'.\n"; return 1; }
-        f << verseText;
-    }
-    {
-        ofstream f(tmpCite);
-        if (!f) { cerr << "Error: could not write temp file '" << tmpCite  << "'.\n"; return 1; }
-        f << citation;
-    }
+    string quotedVerse    = shellQuote(verseText);
+    string quotedCitation = shellQuote(citation);
 
     // ── Layout calculations ───────────────────────────────────────────────
     // Scale all measurements proportionally to the chosen image size.
@@ -429,14 +440,22 @@ int main(int argc, char* argv[]) {
     int borderH = max(10, (int)(20 * scale));
     int borderW = max(20, (int)(40 * scale));
 
+    if (im.empty()) {
+        cerr << "Error: ImageMagick not found. Install it with:\n";
+        cerr << "  macOS:   brew install imagemagick\n";
+        cerr << "  Linux:   apt install imagemagick\n";
+        cerr << "  Windows: choco install imagemagick\n";
+        return 1;
+    }
+
     ostringstream cmd1;
-    cmd1 << "magick"
+    cmd1 << im
          << " -background \"" << bgColor << "\""
          << " -fill \""       << textColor << "\""
          << " -font \""       << font << "\""
          << " -gravity Center"                        // center-align each text line
          << " -size "         << verseW << "x" << verseH
-         << " caption:\"@"   << tmpVerse << "\""
+         << " caption:"      << quotedVerse
          << " -trim"                                  // crop to actual text bounds
          << " -bordercolor \"" << bgColor << "\""     // restore padding around text
          << " -border " << borderW << "x" << borderH
@@ -444,13 +463,7 @@ int main(int argc, char* argv[]) {
 
     int ret1 = system(cmd1.str().c_str());
     if (ret1 != 0) {
-        remove(tmpVerse.c_str());
-        remove(tmpCite.c_str());
         cerr << "Error: verse layer generation failed.\n\n";
-        cerr << "bvi requires ImageMagick. Install it with:\n";
-        cerr << "  macOS:   brew install imagemagick\n";
-        cerr << "  Linux:   apt install imagemagick\n";
-        cerr << "  Windows: choco install imagemagick\n\n";
         cerr << "To list fonts or use a font by path:\n";
         cerr << "  magick -list font\n";
         cerr << "  bvi \"...\" --font=\"/path/to/font.ttf\"\n";
@@ -463,7 +476,7 @@ int main(int argc, char* argv[]) {
     // above center to leave room for the citation). The citation is drawn
     // with -annotate at a fixed point size near the bottom edge.
     ostringstream cmd2;
-    cmd2 << "magick"
+    cmd2 << im
          << " -size " << imgWidth << "x" << imgHeight
          << " xc:\"" << bgColor << "\""
          << " \"" << tmpLayer << "\""
@@ -475,22 +488,15 @@ int main(int argc, char* argv[]) {
          << " -pointsize " << citePt
          << " -gravity South"
          << " -annotate +0+" << citeOffY
-         << " \"@" << tmpCite << "\""
+         << " " << quotedCitation
          << " \"" << outputFile << "\"";
 
     int ret2 = system(cmd2.str().c_str());
 
-    // Clean up temp files regardless of result
-    remove(tmpVerse.c_str());
-    remove(tmpCite.c_str());
     remove(tmpLayer.c_str());
 
     if (ret2 != 0) {
         cerr << "Error: image generation failed.\n\n";
-        cerr << "bvi requires ImageMagick. Install it with:\n";
-        cerr << "  macOS:   brew install imagemagick\n";
-        cerr << "  Linux:   apt install imagemagick\n";
-        cerr << "  Windows: choco install imagemagick\n\n";
         cerr << "To list fonts or use a font by path:\n";
         cerr << "  magick -list font\n";
         cerr << "  bvi \"...\" --font=\"/path/to/font.ttf\"\n";

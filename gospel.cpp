@@ -101,7 +101,7 @@ vector<Section> romansRoadSections = {
     {"3. Salvation Is A Gift", "\n[Romans 6:23]"},
     {"4. We Are Saved By Grace", "\n[Romans 11:6]"},
     {"5. Salvation Comes Through Faith", "\n[Romans 4:5]"},
-    {"6. God Saves All Who Call Upon Him", "\n[Romans 10:13]\nThe Bible says there are two roads in life: one is the way to eternal joy in Heaven, and the other leads to eternal punishment in Hell. Which road are you on?\n\nFollow the Romans Road to salvation today. Recognize that you are a sinner and that your sin must be judged by God. See that Jesus died to pay the penalty for your sin, but that you must choose to accept His provision. Understand that you cannot earn your way to Heaven through good works or religious activity. Now turn to God and put your faith in Jesus Christ who died for you and rose again.\n[Romans 10:9-10]"},
+    {"6. God Saves All Who Call Upon Him", "\n[Romans 10:13]\n\nThe Bible says there are two roads in life: one is the way to eternal joy in Heaven, and the other leads to eternal punishment in Hell. Which road are you on?\n\nFollow the Romans Road to salvation today. Recognize that you are a sinner and that your sin must be judged by God. See that Jesus died to pay the penalty for your sin, but that you must choose to accept His provision. Understand that you cannot earn your way to Heaven through good works or religious activity. Now turn to God and put your faith in Jesus Christ who died for you and rose again.\n\n[Romans 10:9-10]"},
 };
 
 vector<Section> tract2 = {
