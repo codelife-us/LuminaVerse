@@ -21,10 +21,12 @@ A C++ program that displays various gospel presentation tracts, biblical framewo
 - Optional curly quotes around verse text with `--versequotes`
 - Italics for verse output opt-in with `--italic` (tract inline refs stay italic by default)
 - Shorthand multi-reference: `"Psalm 7, 27"` is the same as `"Psalm 7, Psalm 27"`
-- Save output to a file with `--output=`, including PDF via pandoc
+- Save output to a file with `--output=`, including PDF and EPUB via pandoc
 - PDF font control: custom font (`--pdffont=`), size as percentage (`--pdffontsize=`), and margin (`--pdfmargin=`)
 - Print PDF directly to printer with `--print`
-- Batch export every tract in every Bible version as `.txt`, `.md`, and `.pdf` with `--outputall`
+- EPUB output with embedded title metadata and optional cover image via `--titlegraphic`
+- EPUB automatically appends `gospel_epub_add.txt` if present, with QR code generated from any URL on the last line (requires `qrencode`)
+- Batch export every tract in every Bible version as `.txt`, `.md`, `.pdf`, and `.epub` with `--outputall`
 - Command-line configurable tract name and Bible version
 - Invalid command line options are reported with an error
 - Auto-prompts to download the Bible translation file if not found
@@ -203,9 +205,28 @@ Print the PDF directly after generating:
 ./gospel --ref="John 3:16" --output=verse.pdf --print
 ```
 
-Batch export all tracts in all Bible versions as `.txt`, `.md`, and `.pdf`:
+Save output as EPUB (requires pandoc):
+```bash
+./gospel --output=romansroad.epub
+./gospel -tn="Somebody Loves You" --output=sly.epub
+```
+
+Save EPUB with a cover image (auto-named `{tractname}_1.jpg` by default):
+```bash
+./gospel --output=romansroad.epub --titlegraphic
+./gospel --output=romansroad.epub --titlegraphic=mycover.jpg
+```
+
+The tract name is embedded as the EPUB title metadata. If `gospel_epub_add.txt` exists in the current directory, its contents are appended to the EPUB. If the last line of that file is a URL, a QR code is generated and included (requires `qrencode`):
+```bash
+brew install qrencode   # macOS
+apt install qrencode    # Linux
+```
+
+Batch export all tracts in all Bible versions as `.txt`, `.md`, `.pdf`, and `.epub`:
 ```bash
 ./gospel --outputall
+./gospel --outputall --titlegraphic   # include cover images in EPUBs
 ```
 
 Files are saved in the current directory using the naming pattern `tractname_VERSION.ext` (tract name lowercased, spaces removed), for example:
@@ -213,11 +234,12 @@ Files are saved in the current directory using the naming pattern `tractname_VER
 theromansroad_KJV.txt
 theromansroad_KJV.md
 theromansroad_KJV.pdf
+theromansroad_KJV.epub
 haveagoodday_BSB.txt
 ...
 ```
 
-Bible versions are skipped silently if their translation file is not present. PDF generation requires pandoc and a LaTeX engine (same as `--output=.pdf`). PDF font and margin options (`--pdffont=`, `--pdfmargin=`, `--pdffontsize=`) apply to all generated PDFs.
+Bible versions are skipped silently if their translation file is not present. PDF and EPUB generation require pandoc (EPUB does not need a LaTeX engine). PDF font and margin options (`--pdffont=`, `--pdfmargin=`, `--pdffontsize=`) apply to all generated PDFs.
 
 To set or fix the default printer:
 
@@ -371,8 +393,13 @@ If a Bible translation file is not found, the program will prompt you to downloa
 - C++11 or later
 - Standard C++ library
 - `curl` (for automatic Bible file download — built into Windows 10+)
-- `pandoc` + a LaTeX engine (for PDF output):
+- `pandoc` (for PDF and EPUB output):
+  - macOS/Linux/Windows: see [pandoc.org](https://pandoc.org/installing.html)
+- A LaTeX engine (for PDF output only):
   - macOS: `basictex` via Homebrew
   - Linux: `texlive` via apt
   - Windows: `MiKTeX` via winget
 - `xelatex` / `xetex` (for custom PDF fonts via `--pdffont=`)
+- `qrencode` (optional, for QR code in EPUB from `gospel_epub_add.txt`):
+  - macOS: `brew install qrencode`
+  - Linux: `apt install qrencode`

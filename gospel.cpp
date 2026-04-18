@@ -588,6 +588,84 @@ bool writePdfFile(const string& content, const string& outputFile,
     return true;
 }
 
+string tractSlug(const string& name) {
+    string s = name;
+    transform(s.begin(), s.end(), s.begin(), ::tolower);
+    s.erase(remove(s.begin(), s.end(), ' '), s.end());
+    return s;
+}
+
+bool writeEpubFile(const string& content, const string& outputFile, const string& coverImage = "", const string& title = "") {
+    string tmpFile = outputFile + ".tmp.md";
+    string qrTmpFile = outputFile + ".tmp.qr.png";
+    bool hasQr = false;
+
+    ofstream tmp(tmpFile, ios::binary);
+    if (!tmp) {
+        cerr << "Error: could not create temporary file '" << tmpFile << "'." << endl;
+        return false;
+    }
+    tmp.write("\xEF\xBB\xBF", 3);
+    tmp << content;
+
+    // Append gospel_epub_add.txt if present
+    ifstream appendIn("gospel_epub_add.txt");
+    if (appendIn.good()) {
+        string appendContent((istreambuf_iterator<char>(appendIn)), istreambuf_iterator<char>());
+        appendIn.close();
+
+        // Find last non-empty line
+        string lastLine;
+        istringstream iss(appendContent);
+        string line;
+        while (getline(iss, line)) {
+            size_t s = line.find_first_not_of(" \t\r");
+            if (s != string::npos) lastLine = line.substr(s);
+            // trim trailing whitespace
+            size_t e = lastLine.find_last_not_of(" \t\r");
+            if (e != string::npos) lastLine = lastLine.substr(0, e + 1);
+        }
+
+        tmp << "\n\n---\n\n" << appendContent;
+
+        if (lastLine.find("http://") == 0 || lastLine.find("https://") == 0) {
+            string qrCmd = "qrencode -s 6 -o \"" + qrTmpFile + "\" \"" + lastLine + "\"";
+            if (system(qrCmd.c_str()) == 0) {
+                hasQr = true;
+                tmp << "\n\n![](" << qrTmpFile << ")\n";
+            } else {
+                cerr << "Warning: qrencode not available; skipping QR code." << endl;
+                cerr << "  macOS:  brew install qrencode" << endl;
+                cerr << "  Linux:  apt install qrencode" << endl;
+            }
+        }
+    }
+    tmp.close();
+
+    string cmd = "pandoc -f markdown --epub-title-page=false -o \"" + outputFile + "\"";
+    if (!title.empty())
+        cmd += " --metadata title=\"" + title + "\"";
+    if (!coverImage.empty()) {
+        ifstream test(coverImage);
+        if (test.good()) {
+            cmd += " --epub-cover-image=\"" + coverImage + "\"";
+        } else {
+            cerr << "Warning: cover image not found: " << coverImage << endl;
+        }
+    }
+    cmd += " \"" + tmpFile + "\"";
+
+    int ret = system(cmd.c_str());
+    remove(tmpFile.c_str());
+    if (hasQr) remove(qrTmpFile.c_str());
+    if (ret != 0) {
+        cerr << "Error: EPUB conversion failed for '" << outputFile << "'." << endl;
+        return false;
+    }
+    cerr << "Saved " << outputFile << endl;
+    return true;
+}
+
 void printHelp() {
     cout << "gospel v" << VERSION << endl;
     cout << "\nUsage: gospel [OPTIONS]" << endl;
@@ -606,7 +684,7 @@ void printHelp() {
     cout << "  --refstyle=STYLE         Citation style: 1=new line (default), 2=inline, 3=parentheses, 4=parentheses with version" << endl;
     cout << "  --versenumbers, -vn      Prefix each verse with its verse number, e.g. [1]" << endl;
     cout << "  --versenewline, -vnl     Start each verse on a new line" << endl;
-    cout << "  --output=FILE            Write output to FILE (.pdf requires pandoc)" << endl;
+    cout << "  --output=FILE            Write output to FILE (.pdf/.epub require pandoc)" << endl;
     cout << "  --pdfmargin=MARGIN       PDF margin size (default: 0.5in, e.g. 0.75in, 2cm)" << endl;
     cout << "  --pdffont=FONT           PDF font name (default: Palatino, requires xelatex)" << endl;
     cout << "  --pdffontsize=PCT        PDF font size as a percentage (default: 100, e.g. 120 = 120%)" << endl;
@@ -614,7 +692,9 @@ void printHelp() {
     cout << "  --versequotes            Wrap each Bible verse in curly quotes" << endl;
     cout << "  --chapterheader, -ch     Print book and chapter as a header when outputting a full chapter" << endl;
     cout << "  --print                  Send PDF to printer after generating (requires --output=.pdf)" << endl;
-    cout << "  --outputall              Output .txt, .md, .pdf for every tract and Bible version" << endl;
+    cout << "  --outputall              Output .txt, .md, .pdf, .epub for every tract and Bible version" << endl;
+    cout << "  --titlegraphic           Use cover image for .epub; default: {tractname}_1.jpg" << endl;
+    cout << "  --titlegraphic=FILE      Use FILE as the .epub cover image" << endl;
     cout << "\nConfig file (.gospel in current directory):" << endl;
     cout << "  --saveconfig             Save current settings to .gospel as new defaults" << endl;
     cout << "  --showconfig             Print current effective settings and exit" << endl;
@@ -630,7 +710,10 @@ void printHelp() {
     cout << "  gospel --ref=\"Romans 8\" -vn                       Display a full chapter with verse numbers" << endl;
     cout << "  gospel --output=tract.pdf                         Save tract as PDF (requires pandoc)" << endl;
     cout << "  gospel --ref=\"John 3:16\" --output=verse.pdf       Save verse as PDF (requires pandoc)" << endl;
-    cout << "  gospel --outputall                                Output .txt/.md/.pdf for all tracts and versions" << endl;
+    cout << "  gospel --output=tract.epub                        Save tract as EPUB (requires pandoc)" << endl;
+    cout << "  gospel --output=tract.epub --titlegraphic         Save EPUB with auto-named cover image" << endl;
+    cout << "  gospel --output=tract.epub --titlegraphic=my.jpg  Save EPUB with specified cover image" << endl;
+    cout << "  gospel --outputall                                Output .txt/.md/.pdf/.epub for all tracts and versions" << endl;
 }
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
@@ -669,6 +752,8 @@ int main(int argc, char* argv[]) {
     bool refStyleExplicit = false;
     bool verseQuotesExplicit = false;
     bool outputAll = false;
+    bool useTitleGraphic = false;
+    string titleGraphicPath;   // empty = use default slug-based name
 
     // Parse command-line arguments
     for(int i = 1; i < argc; ++i) {
@@ -761,6 +846,11 @@ int main(int argc, char* argv[]) {
             showConfig = true;
         } else if (arg == "--outputall") {
             outputAll = true;
+        } else if (arg == "--titlegraphic") {
+            useTitleGraphic = true;
+        } else if (arg.find("--titlegraphic=") == 0) {
+            useTitleGraphic = true;
+            titleGraphicPath = arg.substr(arg.find('=') + 1);
         } else if (arg.find("-") == 0) {
             cerr << "Error: unknown option '" << arg << "'" << endl;
             cerr << "Run 'gospel --help' for usage." << endl;
@@ -889,6 +979,17 @@ int main(int argc, char* argv[]) {
                     string content = generateTractContent(tract, ver, true, true, tractRefStyle, false, tractVerseQuotes, false);
                     writePdfFile(content, base + ".pdf", pdfMargin, pdfFont, pdfFontSizePct);
                 }
+
+                // .epub
+                {
+                    pdfColorRegistry.clear();
+                    pdfColorCounter = 0;
+                    string content = generateTractContent(tract, ver, true, false, tractRefStyle, false, tractVerseQuotes, false);
+                    string cover = useTitleGraphic
+                        ? (titleGraphicPath.empty() ? tractSlug(tract.name) + "_1.jpg" : titleGraphicPath)
+                        : "";
+                    writeEpubFile(content, base + ".epub", cover, tract.name);
+                }
             }
         }
         return 0;
@@ -941,9 +1042,11 @@ int main(int argc, char* argv[]) {
     // PDF output always requires markdown as the intermediate format
     bool isPdf = outputFile.size() >= 4 &&
                  outputFile.substr(outputFile.size() - 4) == ".pdf";
+    bool isEpub = outputFile.size() >= 5 &&
+                  outputFile.substr(outputFile.size() - 5) == ".epub";
     bool isMd = outputFile.size() >= 3 &&
                 outputFile.substr(outputFile.size() - 3) == ".md";
-    bool markdown = isPdf || isMd || (outputType == "md" || outputType == "MD");
+    bool markdown = isPdf || isEpub || isMd || (outputType == "md" || outputType == "MD");
 
     // Capture all output into a string so we can route it to stdout or a file
     ostringstream out;
@@ -1140,6 +1243,19 @@ int main(int argc, char* argv[]) {
                     cerr << "Sent to printer." << endl;
             }
 #endif
+        }
+    } else if (isEpub) {
+        string cover = useTitleGraphic
+            ? (titleGraphicPath.empty() ? tractSlug(tractName) + "_1.jpg" : titleGraphicPath)
+            : "";
+        if (!writeEpubFile(out.str(), outputFile, cover, tractName)) {
+            cerr << endl;
+            cerr << "EPUB generation requires pandoc." << endl;
+            cerr << "Install with:" << endl;
+            cerr << "  macOS:   brew install pandoc" << endl;
+            cerr << "  Linux:   apt install pandoc" << endl;
+            cerr << "  Windows: winget install pandoc" << endl;
+            return 1;
         }
     } else {
         ofstream f(outputFile);
