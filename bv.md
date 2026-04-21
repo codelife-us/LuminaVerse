@@ -55,6 +55,11 @@ Look up a verse range:
 ./bv --ref="Romans 8:9-11"
 ```
 
+Look up a cross-chapter verse range:
+```bash
+./bv --ref="Judges 7:21-8:5"
+```
+
 Look up from a verse to end of chapter (omit ending number after dash):
 ```bash
 ./bv --ref="Romans 8:20-"
@@ -100,10 +105,41 @@ Italicize verse text (useful when piping to markdown):
 ./bv --ref="John 3:16" --italic
 ```
 
-Open the reference on esv.org in the browser (prompts before opening):
+Open the reference on esv.org in the browser (no prompt, verse output suppressed):
 ```bash
 ./bv --ref="John 3:16" -esv
 ./bv --ref="John 3:16" --openesv
+```
+
+## Daily Reading Plans
+
+Look up today's reading from the default (Chronological) plan:
+```bash
+./bv --day
+```
+
+Look up a specific day's reading:
+```bash
+./bv --day=42
+```
+
+Select a reading plan with `--plan=`:
+```bash
+./bv --plan=Chronological --day       # default
+./bv --plan=Sequential --day          # also: Canonical, Straight Through
+./bv --plan="Old and New Testament" --day   # also: OTNT, OT and NT
+```
+
+Print only the reference string (no verse text) — useful for scripting:
+```bash
+./bv --day --refonly
+./bv --day=42 --refonly
+```
+
+Open today's reading on esv.org:
+```bash
+./bv --day -esv
+./bv --day=42 --plan=Sequential -esv
 ```
 
 ## Citation Styles
@@ -147,11 +183,11 @@ bv --ref="John 3:16" | clip
 
 `bv` reads defaults from a `.gospel` file in the current directory (shared with the `gospel` tool). Command-line arguments always override the config file.
 
-Supported keys: `bv`, `refstyle`, `versequotes`
+Supported keys: `bv`, `refstyle`, `versequotes`, `plan`
 
 Save current settings as defaults:
 ```bash
-./bv -bv=BSB --refstyle=2 --saveconfig
+./bv -bv=BSB --refstyle=2 --plan=Sequential --saveconfig
 ```
 
 This writes a `.gospel` file like:
@@ -160,6 +196,7 @@ This writes a `.gospel` file like:
 bv          = BSB
 refstyle    = 2
 versequotes = 0
+plan        = Sequential
 ```
 
 Print effective settings and exit:
