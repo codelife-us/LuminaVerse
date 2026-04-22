@@ -14,6 +14,7 @@ A C++ program that renders a Bible verse reference to a JPEG image with auto-fit
 - Verse ranges (`John 3:16-17`), verse-to-end-of-chapter (`Romans 8:28-`)
 - Configurable image size (default 1920×1080)
 - Configurable colors for background, verse text, and citation
+- Photo background support with adjustable dimming for text readability
 - Optional curly quotation marks around the verse text
 - Configurable citation font size (or auto-scaled based on image height)
 - Custom font support
@@ -64,7 +65,9 @@ Change image dimensions:
 ./bvi "John 3:16" --width=1080 --height=1080
 ```
 
-## Colors
+## Background
+
+### Solid color
 
 Colors accept any value ImageMagick understands: named colors, hex codes, or ImageMagick built-ins.
 
@@ -79,6 +82,21 @@ Colors accept any value ImageMagick understands: named colors, hex codes, or Ima
 | `--bg=COLOR` | `black` | Background color |
 | `--textcolor=COLOR` | `white` | Verse text color |
 | `--citecolor=COLOR` | `gray60` | Citation line color |
+
+### Photo background
+
+Use any JPEG or PNG as the background. The photo is resized and cropped to fill the canvas. A darkening pass (`--dim`) improves text readability over busy photos.
+
+```bash
+./bvi "John 3:16" --bgphoto="sunset.jpg"
+./bvi "John 3:16" --bgphoto="photo.jpg" --dim=40
+./bvi "John 3:16" --bgphoto="photo.png" --dim=0 --textcolor=white --citecolor=gray80
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--bgphoto=FILE` | _(none)_ | Background photo; overrides `--bg` |
+| `--dim=N` | `50` | Darken photo 0–100% (0 = no dim, 100 = black) |
 
 ## Quotation Marks
 
@@ -134,13 +152,15 @@ width     = 1920
 height    = 1080
 font      = /System/Library/Fonts/Palatino.ttc
 bg        = #1a1a2e
+bgphoto   = /path/to/photo.jpg
+dim       = 50
 textcolor = #e8e8f0
 citecolor = #8888bb
 quotes    = yes
 citesize  = 32
 ```
 
-Supported keys: `bv`, `width`, `height`, `font`, `bg`, `textcolor`, `citecolor`, `quotes`, `citesize`
+Supported keys: `bv`, `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `citecolor`, `quotes`, `citesize`
 
 ## Bible Translations
 

@@ -47,7 +47,7 @@ using namespace std;
 #define HOME_ENV "HOME"
 #endif
 
-const string BVI_VERSION = "1.2";
+const string BVI_VERSION = "1.3";
 const string CONFIG_FILE = ".bvi";
 
 // ── Config file (.bvi in current directory) ───────────────────────────────────
@@ -202,6 +202,8 @@ void printHelp() {
     cout << "  --height=N              Image height in pixels (default: 1080)\n";
     cout << "  --font=FONT             Font name or file path\n";
     cout << "  --bg=COLOR              Background color (default: black)\n";
+    cout << "  --bgphoto=FILE          Background photo (jpg/png); overrides --bg\n";
+    cout << "  --dim=N                 Darken photo 0-100% (default: 50); ignored without --bgphoto\n";
     cout << "  --textcolor=COLOR       Verse text color (default: white)\n";
     cout << "  --citecolor=COLOR       Citation text color (default: gray60)\n";
     cout << "  --quotes                Wrap verse text in \xe2\x80\x9c\xe2\x80\x9d quotation marks\n";
@@ -210,7 +212,7 @@ void printHelp() {
     cout << "Config file (.bvi in current directory):\n";
     cout << "  --saveconfig            Save current settings to .bvi as new defaults\n";
     cout << "  --showconfig            Print current effective settings and exit\n\n";
-    cout << "  Supported keys in .bvi:  bv  width  height  font  bg  textcolor  citecolor  quotes  citesize\n\n";
+    cout << "  Supported keys in .bvi:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  quotes  citesize\n\n";
     cout << "Requires:\n";
     cout << "  ImageMagick  —  brew install imagemagick\n\n";
     cout << "Examples:\n";
@@ -247,6 +249,8 @@ int main(int argc, char* argv[]) {
     int imgHeight     = stoi(cfgGet(cfg, "height",    "1080"));
     string font       = cfgGet(cfg, "font",           defaultFont);
     string bgColor    = cfgGet(cfg, "bg",             "black");
+    string bgPhoto    = cfgGet(cfg, "bgphoto",        "");
+    int    dimPct     = stoi(cfgGet(cfg, "dim",       "50"));
     string textColor  = cfgGet(cfg, "textcolor",      "white");
     string citeColor  = cfgGet(cfg, "citecolor",      "gray60");
     bool quotes       = cfgGet(cfg, "quotes",         "no") == "yes";
@@ -278,6 +282,10 @@ int main(int argc, char* argv[]) {
             font = arg.substr(7);
         } else if (arg.find("--bg=") == 0) {
             bgColor = arg.substr(5);
+        } else if (arg.find("--bgphoto=") == 0) {
+            bgPhoto = arg.substr(10);
+        } else if (arg.find("--dim=") == 0) {
+            dimPct = stoi(arg.substr(6));
         } else if (arg.find("--textcolor=") == 0) {
             textColor = arg.substr(12);
         } else if (arg.find("--citecolor=") == 0) {
@@ -313,6 +321,8 @@ int main(int argc, char* argv[]) {
         cout << "  height     = " << imgHeight << "\n";
         cout << "  font       = " << font      << "\n";
         cout << "  bg         = " << bgColor   << "\n";
+        cout << "  bgphoto    = " << (bgPhoto.empty() ? "(none)" : bgPhoto) << "\n";
+        cout << "  dim        = " << dimPct    << "\n";
         cout << "  textcolor  = " << textColor << "\n";
         cout << "  citecolor  = " << citeColor << "\n";
         cout << "  quotes     = " << (quotes ? "yes" : "no") << "\n";
@@ -338,6 +348,8 @@ int main(int argc, char* argv[]) {
         f << "height    = " << imgHeight << "\n";
         f << "font      = " << font      << "\n";
         f << "bg        = " << bgColor   << "\n";
+        f << "bgphoto   = " << bgPhoto   << "\n";
+        f << "dim       = " << dimPct    << "\n";
         f << "textcolor = " << textColor << "\n";
         f << "citecolor = " << citeColor << "\n";
         f << "quotes    = " << (quotes ? "yes" : "no") << "\n";
@@ -464,16 +476,20 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // When using a photo background the verse layer needs a transparent
+    // background so it composites cleanly over the photo.
+    string layerBg = bgPhoto.empty() ? bgColor : "none";
+
     ostringstream cmd1;
     cmd1 << im
-         << " -background \"" << bgColor << "\""
+         << " -background \"" << layerBg << "\""
          << " -fill \""       << textColor << "\""
          << " -font \""       << font << "\""
          << " -gravity Center"                        // center-align each text line
          << " -size "         << verseW << "x" << verseH
          << " caption:"      << quotedVerse
          << " -trim"                                  // crop to actual text bounds
-         << " -bordercolor \"" << bgColor << "\""     // restore padding around text
+         << " -bordercolor \"" << layerBg << "\""     // restore padding around text
          << " -border " << borderW << "x" << borderH
          << " \"" << tmpLayer << "\"";
 
@@ -492,20 +508,42 @@ int main(int argc, char* argv[]) {
     // above center to leave room for the citation). The citation is drawn
     // with -annotate at a fixed point size near the bottom edge.
     ostringstream cmd2;
-    cmd2 << im
-         << " -size " << imgWidth << "x" << imgHeight
-         << " xc:\"" << bgColor << "\""
-         << " \"" << tmpLayer << "\""
-         << " -gravity Center"
-         << " -geometry +0-" << verseOffY
-         << " -composite"
-         << " -fill \"" << citeColor << "\""
-         << " -font \"" << font << "\""
-         << " -pointsize " << citePt
-         << " -gravity South"
-         << " -annotate +0+" << citeOffY
-         << " " << quotedCitation
-         << " \"" << outputFile << "\"";
+    if (bgPhoto.empty()) {
+        cmd2 << im
+             << " -size " << imgWidth << "x" << imgHeight
+             << " xc:\"" << bgColor << "\""
+             << " \"" << tmpLayer << "\""
+             << " -gravity Center"
+             << " -geometry +0-" << verseOffY
+             << " -composite"
+             << " -fill \"" << citeColor << "\""
+             << " -font \"" << font << "\""
+             << " -pointsize " << citePt
+             << " -gravity South"
+             << " -annotate +0+" << citeOffY
+             << " " << quotedCitation
+             << " \"" << outputFile << "\"";
+    } else {
+        // Load photo, resize to fill canvas, crop to exact size, then dim.
+        int clampedDim = max(0, min(100, dimPct));
+        cmd2 << im
+             << " \"" << bgPhoto << "\""
+             << " -resize " << imgWidth << "x" << imgHeight << "^"
+             << " -gravity Center"
+             << " -extent " << imgWidth << "x" << imgHeight
+             << " -fill black -colorize " << clampedDim
+             << " \"" << tmpLayer << "\""
+             << " -gravity Center"
+             << " -geometry +0-" << verseOffY
+             << " -composite"
+             << " -fill \"" << citeColor << "\""
+             << " -font \"" << font << "\""
+             << " -pointsize " << citePt
+             << " -gravity South"
+             << " -annotate +0+" << citeOffY
+             << " " << quotedCitation
+             << " \"" << outputFile << "\"";
+    }
 
     int ret2 = system(cmd2.str().c_str());
 
