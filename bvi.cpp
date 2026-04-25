@@ -210,6 +210,7 @@ void printHelp() {
     cout << "  --dim=N                 Darken photo 0-100% (default: 50); ignored without --bgphoto\n";
     cout << "  --textcolor=COLOR       Verse text color (default: white)\n";
     cout << "  --citecolor=COLOR       Citation text color (default: gray60)\n";
+    cout << "  --citefont=FONT         Citation font name or path (default: same as verse font)\n";
     cout << "  --quotes                Wrap verse text in \xe2\x80\x9c\xe2\x80\x9d quotation marks\n";
     cout << "  --no-quotes             Remove quotation marks (default)\n";
     cout << "  --citesize=N            Citation font size in points (default: auto ~30pt at 1080p)\n";
@@ -217,6 +218,8 @@ void printHelp() {
     cout << "  --citestyle=STYLE       dash (default): \xe2\x80\x94 Ref (Ver)  |  parens: (Ref, Ver)  |  plain: Ref (Ver)  |  none: omit citation\n";
     cout << "  --citeplacement=WHERE   bottom (default): near bottom edge  |  below: just under verse text\n";
     cout << "  --citebibleversion=VAL  yes (default): include Bible version in citation  |  no/false: omit it\n";
+    cout << "  --citeshadow            Add drop shadow behind citation text\n";
+    cout << "  --no-citeshadow         Remove citation drop shadow (default)\n";
     cout << "  --textsize=N            Cap verse font at N points (absolute; cannot combine with --textscale)\n";
     cout << "  --textscale=PCT         Scale verse text area to PCT% of default (e.g. 75); cannot combine with --textsize\n";
     cout << "  --textpanel=N           Semi-transparent panel behind text, N=opacity 1-100 (default: off)\n";
@@ -226,7 +229,7 @@ void printHelp() {
     cout << "Config file (.bvi in current directory):\n";
     cout << "  --saveconfig            Save current settings to .bvi as new defaults\n";
     cout << "  --showconfig            Print current effective settings and exit\n\n";
-    cout << "  Supported keys in .bvi:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  quotes  citesize  citescale  citestyle  citeplacement  citebibleversion  textsize  textscale  textpanel  textpanelcolor  textshadow\n\n";
+    cout << "  Supported keys in .bvi:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  citefont  quotes  citesize  citescale  citestyle  citeplacement  citebibleversion  citeshadow  textsize  textscale  textpanel  textpanelcolor  textshadow\n\n";
     cout << "Requires:\n";
     cout << "  ImageMagick  —  brew install imagemagick\n\n";
     cout << "Examples:\n";
@@ -269,6 +272,7 @@ int main(int argc, char* argv[]) {
     int    dimPct     = stoi(cfgGet(cfg, "dim",       "50"));
     string textColor  = cfgGet(cfg, "textcolor",      "white");
     string citeColor  = cfgGet(cfg, "citecolor",      "gray60");
+    string citeFont   = cfgGet(cfg, "citefont",       "");               // empty = same as verse font
     bool quotes       = cfgGet(cfg, "quotes",         "no") == "yes";
     int citeSizeOvr      = stoi(cfgGet(cfg, "citesize",      "0"));      // 0 = auto
     int citeScalePct     = stoi(cfgGet(cfg, "citescale",     "100"));    // 100 = auto base
@@ -276,6 +280,7 @@ int main(int argc, char* argv[]) {
     string citePlacement = cfgGet(cfg, "citeplacement", "bottom");       // bottom | below
     bool citeBibleVersion = (cfgGet(cfg, "citebibleversion", "yes") != "no" &&
                              cfgGet(cfg, "citebibleversion", "yes") != "false");
+    bool citeShadow      = cfgGet(cfg, "citeshadow",       "no") == "yes";
     int textSizeOvr      = stoi(cfgGet(cfg, "textsize",      "0"));      // 0 = off (no cap)
     int textScalePct     = stoi(cfgGet(cfg, "textscale",     "100"));    // 100 = fill canvas
     int textPanelOpacity = stoi(cfgGet(cfg, "textpanel",     "0"));      // 0 = off
@@ -316,6 +321,8 @@ int main(int argc, char* argv[]) {
             textColor = arg.substr(12);
         } else if (arg.find("--citecolor=") == 0) {
             citeColor = arg.substr(12);
+        } else if (arg.find("--citefont=") == 0) {
+            citeFont = arg.substr(11);
         } else if (arg == "--quotes") {
             quotes = true;
         } else if (arg == "--no-quotes") {
@@ -331,6 +338,10 @@ int main(int argc, char* argv[]) {
         } else if (arg.find("--citebibleversion=") == 0) {
             string val = arg.substr(19);
             citeBibleVersion = (val != "no" && val != "false");
+        } else if (arg == "--citeshadow") {
+            citeShadow = true;
+        } else if (arg == "--no-citeshadow") {
+            citeShadow = false;
         } else if (arg.find("--textsize=") == 0) {
             textSizeOvr = stoi(arg.substr(11));
         } else if (arg.find("--textscale=") == 0) {
@@ -395,12 +406,14 @@ int main(int argc, char* argv[]) {
         cout << "  dim              = " << dimPct    << "\n";
         cout << "  textcolor        = " << textColor << "\n";
         cout << "  citecolor        = " << citeColor << "\n";
+        cout << "  citefont         = " << (citeFont.empty() ? "(same as font)" : citeFont) << "\n";
         cout << "  quotes           = " << (quotes ? "yes" : "no") << "\n";
         cout << "  citesize         = " << (citeSizeOvr > 0 ? to_string(citeSizeOvr) : "auto") << "\n";
         cout << "  citescale        = " << citeScalePct << "%\n";
         cout << "  citestyle        = " << citeStyle     << "\n";
         cout << "  citeplacement    = " << citePlacement << "\n";
         cout << "  citebibleversion = " << (citeBibleVersion ? "yes" : "no") << "\n";
+        cout << "  citeshadow       = " << (citeShadow ? "yes" : "no") << "\n";
         cout << "  textsize         = " << (textSizeOvr > 0 ? to_string(textSizeOvr) : "off") << "\n";
         cout << "  textscale        = " << textScalePct << "%\n";
         cout << "  textpanel        = " << (textPanelOpacity > 0 ? to_string(textPanelOpacity) + "%" : "off") << "\n";
@@ -431,12 +444,14 @@ int main(int argc, char* argv[]) {
         f << "dim              = " << dimPct    << "\n";
         f << "textcolor        = " << textColor << "\n";
         f << "citecolor        = " << citeColor << "\n";
+        f << "citefont         = " << citeFont  << "\n";
         f << "quotes           = " << (quotes ? "yes" : "no") << "\n";
         f << "citesize         = " << citeSizeOvr   << "\n";
         f << "citescale        = " << citeScalePct  << "\n";
         f << "citestyle        = " << citeStyle     << "\n";
         f << "citeplacement    = " << citePlacement << "\n";
         f << "citebibleversion = " << (citeBibleVersion ? "yes" : "no") << "\n";
+        f << "citeshadow       = " << (citeShadow ? "yes" : "no") << "\n";
         f << "textsize         = " << textSizeOvr   << "\n";
         f << "textscale        = " << textScalePct  << "\n";
         f << "textpanel        = " << textPanelOpacity << "\n";
@@ -671,21 +686,49 @@ int main(int argc, char* argv[]) {
     // ── Citation annotation fragment ──────────────────────────────────────
     ostringstream citeAnnot;
     if (citeStyle != "none") {
-        citeAnnot << " -fill \""    << citeColor << "\""
-                  << " -font \""    << font      << "\""
-                  << " -pointsize " << citePt;
+        string activeCiteFont = citeFont.empty() ? font : citeFont;
+        int shadowOff = max(2, (int)(3 * scale));
 
         if (citePlacement == "below") {
             int citeGap = max(5, (int)(12 * scale));
             int offset  = -verseOffY + layerH / 2 + citeGap;
-            citeAnnot << " -gravity Center"
+
+            if (citeShadow) {
+                int shadowY = offset + shadowOff;
+                citeAnnot << " -fill black"
+                          << " -font \"" << activeCiteFont << "\""
+                          << " -pointsize " << citePt
+                          << " -gravity Center"
+                          << " -annotate +" << shadowOff
+                          << (shadowY >= 0 ? "+" : "-") << abs(shadowY)
+                          << " " << quotedCitation;
+            }
+
+            citeAnnot << " -fill \"" << citeColor << "\""
+                      << " -font \"" << activeCiteFont << "\""
+                      << " -pointsize " << citePt
+                      << " -gravity Center"
                       << (offset >= 0 ? " -annotate +0+" : " -annotate +0-")
-                      << abs(offset);
+                      << abs(offset)
+                      << " " << quotedCitation;
         } else {
-            citeAnnot << " -gravity South"
-                      << " -annotate +0+" << citeOffY;
+            if (citeShadow) {
+                int shadowSouthY = max(0, citeOffY - shadowOff);
+                citeAnnot << " -fill black"
+                          << " -font \"" << activeCiteFont << "\""
+                          << " -pointsize " << citePt
+                          << " -gravity South"
+                          << " -annotate +" << shadowOff << "+" << shadowSouthY
+                          << " " << quotedCitation;
+            }
+
+            citeAnnot << " -fill \"" << citeColor << "\""
+                      << " -font \"" << activeCiteFont << "\""
+                      << " -pointsize " << citePt
+                      << " -gravity South"
+                      << " -annotate +0+" << citeOffY
+                      << " " << quotedCitation;
         }
-        citeAnnot << " " << quotedCitation;
     }
 
     // ── Step 2: Composite verse layer + annotate citation ─────────────────

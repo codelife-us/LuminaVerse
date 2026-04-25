@@ -20,6 +20,8 @@ A C++ program that renders a Bible verse reference (or custom text) to a JPEG im
 - Citation style: em-dash prefix, parentheses-wrapped, plain, or omitted (`--citestyle`)
 - Citation placement: fixed at bottom edge or attached just below verse text (`--citeplacement`)
 - Citation font size: absolute (`--citesize`) or relative to auto (`--citescale`)
+- Citation font independent from verse font (`--citefont`)
+- Citation drop shadow (`--citeshadow`)
 - Option to omit the Bible version from the citation (`--citebibleversion=no`)
 - Verse text size override: cap at an absolute point size (`--textsize`) or scale relative to the auto-fit (`--textscale`)
 - Semi-transparent panel behind verse text for readability (`--textpanel`)
@@ -217,6 +219,25 @@ Control where the citation appears with `--citeplacement`:
 ./bvi "John 3:16" --citeplacement=below --citestyle=plain
 ```
 
+### Font
+
+By default the citation uses the same font as the verse text. Override it independently with `--citefont`:
+
+```bash
+./bvi "John 3:16" --citefont="Georgia"
+./bvi "John 3:16" --font="Palatino" --citefont="Helvetica"
+./bvi "John 3:16" --citefont="/Library/Fonts/MyFont.ttf"
+```
+
+### Shadow
+
+Add a drop shadow behind the citation text:
+
+```bash
+./bvi "John 3:16" --citeshadow
+./bvi "John 3:16" --citeshadow --textshadow   # shadow on both verse and citation
+```
+
 ### Size
 
 By default the citation point size is auto-scaled based on image height (~30pt at 1080p). Use one of these options to change it — they cannot be combined.
@@ -294,12 +315,14 @@ bgphoto          = /path/to/photo.jpg
 dim              = 50
 textcolor        = #e8e8f0
 citecolor        = #8888bb
+citefont         =
 quotes           = yes
 citesize         = 0
 citescale        = 100
 citestyle        = dash
 citeplacement    = bottom
 citebibleversion = yes
+citeshadow       = no
 textsize         = 0
 textscale        = 100
 textpanel        = 0
@@ -307,7 +330,7 @@ textpanelcolor   = black
 textshadow       = no
 ```
 
-Supported keys: `bv`, `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `citecolor`, `quotes`, `citesize`, `citescale`, `citestyle`, `citeplacement`, `citebibleversion`, `textsize`, `textscale`, `textpanel`, `textpanelcolor`, `textshadow`
+Supported keys: `bv`, `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `citecolor`, `citefont`, `quotes`, `citesize`, `citescale`, `citestyle`, `citeplacement`, `citebibleversion`, `citeshadow`, `textsize`, `textscale`, `textpanel`, `textpanelcolor`, `textshadow`
 
 ## Bible Translations
 
