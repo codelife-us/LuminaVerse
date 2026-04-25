@@ -1,6 +1,6 @@
 # bv
 
-A C++ command-line tool for looking up Bible verses and outputting them to stdout or esv.org via a browser. You can output a day's reading plan from 3 different plans.
+A lightweight C++ command-line tool for looking up Bible verses and outputting them to stdout. A stripped-down companion to `gospel`, focused purely on verse reference lookup with no tract output, no file writing, and no PDF generation.
 
 ## Building
 
@@ -107,6 +107,7 @@ Italicize verse text (useful when piping to markdown):
 
 Open the reference on esv.org in the browser (no prompt, verse output suppressed):
 ```bash
+./bv --ref="John 3:16" -e
 ./bv --ref="John 3:16" -esv
 ./bv --ref="John 3:16" --openesv
 ```
@@ -115,11 +116,13 @@ Open the reference on esv.org in the browser (no prompt, verse output suppressed
 
 Look up today's reading from the default (Chronological) plan:
 ```bash
+./bv -d
 ./bv --day
 ```
 
 Look up a specific day's reading:
 ```bash
+./bv -d=42
 ./bv --day=42
 ```
 
@@ -138,6 +141,7 @@ Print only the reference string (no verse text) — useful for scripting:
 
 Open today's reading on esv.org:
 ```bash
+./bv -d -e
 ./bv --day -esv
 ./bv --day=42 --plan=Sequential -esv
 ```

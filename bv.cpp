@@ -1523,9 +1523,9 @@ void printHelp() {
     cout << "  --italic                Italicize verse text" << endl;
     cout << "  --versequotes           Wrap each verse in curly quotes" << endl;
     cout << "  --chapterheader, -ch    Print book and chapter as a header for full chapters" << endl;
-    cout << "  -esv, --openesv         Open reference on esv.org in the browser" << endl;
-    cout << "  --day                   Show today's reading from the reading plan" << endl;
-    cout << "  --day=N                 Show day N (1-365) from the reading plan" << endl;
+    cout << "  -e, -esv, --openesv     Open reference on esv.org in the browser" << endl;
+    cout << "  -d, --day               Show today's reading from the reading plan" << endl;
+    cout << "  -d=N, --day=N           Show day N (1-365) from the reading plan" << endl;
     cout << "  --plan=NAME             Select reading plan (default: Chronological)" << endl;
     cout << "                          Sequential (aliases: Canonical, Straight Through)" << endl;
     cout << "                          Old and New Testament (aliases: OTNT, OT and NT)" << endl;
@@ -1598,19 +1598,19 @@ int main(int argc, char* argv[]) {
             saveConfig = true;
         } else if (arg == "--showconfig") {
             showConfig = true;
-        } else if (arg == "--openesv" || arg == "-esv") {
+        } else if (arg == "--openesv" || arg == "-esv" || arg == "-e") {
             openEsv = true;
         } else if (arg.find("--plan=") == 0) {
             planArg = arg.substr(7);
             transform(planArg.begin(), planArg.end(), planArg.begin(), ::tolower);
         } else if (arg == "--refonly") {
             refOnly = true;
-        } else if (arg == "--day") {
+        } else if (arg == "--day" || arg == "-d") {
             time_t t = time(nullptr);
             struct tm* lt = localtime(&t);
             dayArg = lt->tm_yday + 1;
-        } else if (arg.find("--day=") == 0) {
-            dayArg = stoi(arg.substr(6));
+        } else if (arg.find("--day=") == 0 || arg.find("-d=") == 0) {
+            dayArg = stoi(arg.substr(arg.find('=') + 1));
         } else if (arg.find("-") == 0) {
             cerr << "Error: unknown option '" << arg << "'" << endl;
             cerr << "Run 'bv --help' for usage." << endl;
