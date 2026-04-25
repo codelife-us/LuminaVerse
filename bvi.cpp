@@ -191,10 +191,14 @@ string detectIM() {
 
 void printHelp() {
     cout << "bvi v" << BVI_VERSION << "\n\n";
-    cout << "Usage: bvi \"Reference\" [OPTIONS]\n\n";
+    cout << "Usage: bvi \"Reference\" [OPTIONS]\n";
+    cout << "       bvi --ref=\"Reference\" [OPTIONS]\n";
+    cout << "       bvi --text=\"Custom text\" [OPTIONS]\n\n";
     cout << "  Reference formats: \"Book Ch:V\"  \"Book Ch:V-V\"  \"Book Ch:V-\"\n\n";
     cout << "Options:\n";
     cout << "  -h, --help              Show this help message and exit\n";
+    cout << "  -ref=REF, --ref=REF     Bible reference (alternative to positional argument)\n";
+    cout << "  --text=TEXT             Custom text to render, bypassing Bible lookup\n";
     cout << "  -bv=VERSION             Bible version (KJV, BSB, WEB; default: KJV)\n";
     cout << "  --bibleversion=VERSION  Specify Bible version (KJV, BSB, WEB)\n";
     cout << "  --output=FILE           Output image file (default: <Reference>.jpg)\n";
@@ -214,17 +218,22 @@ void printHelp() {
     cout << "  --citeplacement=WHERE   bottom (default): near bottom edge  |  below: just under verse text\n";
     cout << "  --citebibleversion=VAL  yes (default): include Bible version in citation  |  no/false: omit it\n";
     cout << "  --textsize=N            Cap verse font at N points (absolute; cannot combine with --textscale)\n";
-    cout << "  --textscale=PCT         Scale verse text area to PCT% of default (e.g. 75); cannot combine with --textsize\n\n";
+    cout << "  --textscale=PCT         Scale verse text area to PCT% of default (e.g. 75); cannot combine with --textsize\n";
+    cout << "  --textpanel=N           Semi-transparent panel behind text, N=opacity 1-100 (default: off)\n";
+    cout << "  --textpanelcolor=COLOR  Panel color (default: black); any ImageMagick color\n";
+    cout << "  --textshadow            Add drop shadow behind verse text\n";
+    cout << "  --no-textshadow         Remove drop shadow (default)\n\n";
     cout << "Config file (.bvi in current directory):\n";
     cout << "  --saveconfig            Save current settings to .bvi as new defaults\n";
     cout << "  --showconfig            Print current effective settings and exit\n\n";
-    cout << "  Supported keys in .bvi:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  quotes  citesize  citescale  citestyle  citeplacement  citebibleversion  textsize  textscale\n\n";
+    cout << "  Supported keys in .bvi:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  quotes  citesize  citescale  citestyle  citeplacement  citebibleversion  textsize  textscale  textpanel  textpanelcolor  textshadow\n\n";
     cout << "Requires:\n";
     cout << "  ImageMagick  —  brew install imagemagick\n\n";
     cout << "Examples:\n";
     cout << "  bvi \"Philippians 4:6-7\"\n";
-    cout << "  bvi \"John 3:16\" -bv=BSB --output=john316.jpg\n";
+    cout << "  bvi --ref=\"John 3:16\" -bv=BSB --output=john316.jpg\n";
     cout << "  bvi \"Romans 8:28\" --bg=\"#1a1a2e\" --textcolor=\"#e0e0e0\" --citecolor=\"#8888aa\"\n";
+    cout << "  bvi --text=\"He is risen.\" --citestyle=none --bg=black --textcolor=white\n";
     cout << "  bvi --bg=navy --textcolor=gold --citecolor=lightyellow --saveconfig\n";
     cout << "\nTo list available fonts: magick -list font\n";
     cout << "  Or pass a font file path: --font=\"/path/to/font.ttf\"\n";
@@ -250,6 +259,7 @@ int main(int argc, char* argv[]) {
 
     string version    = cfgGet(cfg, "bv",        "KJV");
     string reference;
+    string customText;
     string outputFile;
     int imgWidth      = stoi(cfgGet(cfg, "width",     "1920"));
     int imgHeight     = stoi(cfgGet(cfg, "height",    "1080"));
@@ -268,6 +278,9 @@ int main(int argc, char* argv[]) {
                              cfgGet(cfg, "citebibleversion", "yes") != "false");
     int textSizeOvr      = stoi(cfgGet(cfg, "textsize",      "0"));      // 0 = off (no cap)
     int textScalePct     = stoi(cfgGet(cfg, "textscale",     "100"));    // 100 = fill canvas
+    int textPanelOpacity = stoi(cfgGet(cfg, "textpanel",     "0"));      // 0 = off
+    string textPanelColor = cfgGet(cfg, "textpanelcolor",   "black");
+    bool textShadow      = cfgGet(cfg, "textshadow",        "no") == "yes";
 
     bool saveConfig  = false;
     bool showConfig  = false;
@@ -322,6 +335,20 @@ int main(int argc, char* argv[]) {
             textSizeOvr = stoi(arg.substr(11));
         } else if (arg.find("--textscale=") == 0) {
             textScalePct = stoi(arg.substr(12));
+        } else if (arg.find("--textpanel=") == 0) {
+            textPanelOpacity = stoi(arg.substr(12));
+        } else if (arg.find("--textpanelcolor=") == 0) {
+            textPanelColor = arg.substr(17);
+        } else if (arg == "--textshadow") {
+            textShadow = true;
+        } else if (arg == "--no-textshadow") {
+            textShadow = false;
+        } else if (arg.find("--ref=") == 0) {
+            reference = arg.substr(6);
+        } else if (arg.find("-ref=") == 0) {
+            reference = arg.substr(5);
+        } else if (arg.find("--text=") == 0) {
+            customText = arg.substr(7);
         } else if (arg == "--saveconfig") {
             saveConfig = true;
         } else if (arg == "--showconfig") {
@@ -376,6 +403,9 @@ int main(int argc, char* argv[]) {
         cout << "  citebibleversion = " << (citeBibleVersion ? "yes" : "no") << "\n";
         cout << "  textsize         = " << (textSizeOvr > 0 ? to_string(textSizeOvr) : "off") << "\n";
         cout << "  textscale        = " << textScalePct << "%\n";
+        cout << "  textpanel        = " << (textPanelOpacity > 0 ? to_string(textPanelOpacity) + "%" : "off") << "\n";
+        cout << "  textpanelcolor   = " << textPanelColor << "\n";
+        cout << "  textshadow       = " << (textShadow ? "yes" : "no") << "\n";
         ifstream check(CONFIG_FILE);
         if (check.good())
             cout << "\nConfig file: ./" << CONFIG_FILE << " (loaded)\n";
@@ -409,78 +439,89 @@ int main(int argc, char* argv[]) {
         f << "citebibleversion = " << (citeBibleVersion ? "yes" : "no") << "\n";
         f << "textsize         = " << textSizeOvr   << "\n";
         f << "textscale        = " << textScalePct  << "\n";
+        f << "textpanel        = " << textPanelOpacity << "\n";
+        f << "textpanelcolor   = " << textPanelColor   << "\n";
+        f << "textshadow       = " << (textShadow ? "yes" : "no") << "\n";
         cerr << "Saved defaults to ./" << CONFIG_FILE << "\n";
         return 0;
     }
 
-    if (reference.empty()) {
-        cerr << "Error: no Bible reference given.\n";
+    if (reference.empty() && customText.empty()) {
+        cerr << "Error: no Bible reference or text given.\n";
         cerr << "Usage: bvi \"Reference\" [OPTIONS]\n";
+        cerr << "       bvi --text=\"Custom text\" [OPTIONS]\n";
         cerr << "Example: bvi \"John 3:16\"\n";
         return 1;
     }
 
     if (outputFile.empty())
-        outputFile = refToFilename(reference);
+        outputFile = reference.empty() ? "bvi_output.jpg" : refToFilename(reference);
 
-    // ── Bible version / file resolution ──────────────────────────────────
-    transform(version.begin(), version.end(), version.begin(), ::toupper);
-
-    string bibleFile, bibleUrl;
-    if (version == "KJV") {
-        bibleFile = "BibleKJV.txt";
-        bibleUrl  = "https://openbible.com/textfiles/kjv.txt";
-    } else if (version == "BSB") {
-        bibleFile = "BibleBSB.txt";
-        bibleUrl  = "https://bereanbible.com/bsb.txt";
-    } else if (version == "WEB") {
-        bibleFile = "BibleWEB.txt";
-        bibleUrl  = "https://openbible.com/textfiles/web.txt";
+    // ── Verse text ────────────────────────────────────────────────────────
+    string verseText;
+    if (!customText.empty()) {
+        verseText = customText;
+        if (reference.empty())
+            citeStyle = "none";
     } else {
-        cerr << "Error: unsupported Bible version '" << version << "'.\n";
-        cerr << "Supported versions: KJV, BSB, WEB\n";
-        return 1;
-    }
+        // ── Bible version / file resolution ──────────────────────────────
+        transform(version.begin(), version.end(), version.begin(), ::toupper);
 
-    // Check Bible file; try HOME directory fallback, then offer to download
-    {
-        ifstream test(bibleFile);
-        if (!test.good()) {
-            const char* home = getenv(HOME_ENV);
-            if (home) {
-                string homePath = string(home) + "/" + bibleFile;
-                ifstream homeTest(homePath);
-                if (homeTest.good()) {
-                    bibleFile = homePath;
-                    goto bible_ready;
+        string bibleFile, bibleUrl;
+        if (version == "KJV") {
+            bibleFile = "BibleKJV.txt";
+            bibleUrl  = "https://openbible.com/textfiles/kjv.txt";
+        } else if (version == "BSB") {
+            bibleFile = "BibleBSB.txt";
+            bibleUrl  = "https://bereanbible.com/bsb.txt";
+        } else if (version == "WEB") {
+            bibleFile = "BibleWEB.txt";
+            bibleUrl  = "https://openbible.com/textfiles/web.txt";
+        } else {
+            cerr << "Error: unsupported Bible version '" << version << "'.\n";
+            cerr << "Supported versions: KJV, BSB, WEB\n";
+            return 1;
+        }
+
+        // Check Bible file; try HOME directory fallback, then offer to download
+        {
+            ifstream test(bibleFile);
+            if (!test.good()) {
+                const char* home = getenv(HOME_ENV);
+                if (home) {
+                    string homePath = string(home) + "/" + bibleFile;
+                    ifstream homeTest(homePath);
+                    if (homeTest.good()) {
+                        bibleFile = homePath;
+                        goto bible_ready;
+                    }
                 }
-            }
-            cerr << "Bible file '" << bibleFile << "' not found.\n";
-            cerr << "Download it now? (y/n): ";
-            char answer;
-            cin >> answer;
-            if (answer == 'y' || answer == 'Y') {
-                string cmd = "curl -L \"" + bibleUrl + "\" -o \"" + bibleFile + "\"";
-                if (system(cmd.c_str()) != 0) {
-                    cerr << "Download failed. Please download manually:\n  " << bibleUrl << "\n";
+                cerr << "Bible file '" << bibleFile << "' not found.\n";
+                cerr << "Download it now? (y/n): ";
+                char answer;
+                cin >> answer;
+                if (answer == 'y' || answer == 'Y') {
+                    string cmd = "curl -L \"" + bibleUrl + "\" -o \"" + bibleFile + "\"";
+                    if (system(cmd.c_str()) != 0) {
+                        cerr << "Download failed. Please download manually:\n  " << bibleUrl << "\n";
+                        return 1;
+                    }
+                    cout << "Downloaded " << bibleFile << " successfully.\n";
+                } else {
+                    cerr << "Cannot continue without Bible file. Exiting.\n";
                     return 1;
                 }
-                cout << "Downloaded " << bibleFile << " successfully.\n";
-            } else {
-                cerr << "Cannot continue without Bible file. Exiting.\n";
-                return 1;
             }
         }
-    }
-    bible_ready:
+        bible_ready:
 
-    bibleVerses = loadBible(bibleFile);
+        bibleVerses = loadBible(bibleFile);
 
-    // ── Verse lookup ──────────────────────────────────────────────────────
-    string verseText = lookupVerses(reference);
-    if (verseText.empty()) {
-        cerr << "Error: reference not found: " << reference << "\n";
-        return 1;
+        verseText = lookupVerses(reference);
+        if (verseText.empty()) {
+            cerr << "Error: reference not found: " << reference << "\n";
+            return 1;
+        }
     }
 
     // Optionally wrap verse in curly quotation marks
@@ -538,9 +579,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // When using a photo background the verse layer needs a transparent
-    // background so it composites cleanly over the photo.
-    string layerBg = bgPhoto.empty() ? bgColor : "none";
+    // When using a photo background or text shadow the verse layer needs a
+    // transparent background so it composites cleanly.
+    string layerBg = (bgPhoto.empty() && !textShadow) ? bgColor : "none";
 
     ostringstream cmd1;
     cmd1 << im
@@ -565,10 +606,69 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // ── Optional shadow step ──────────────────────────────────────────────
+    string tmpShadow  = outputFile + ".tmp_shadow.png";
+    string activeLayer = tmpLayer;
+    if (textShadow) {
+        ostringstream shadowCmd;
+        shadowCmd << im << " \"" << tmpLayer << "\""
+                  << " \\( +clone -background black -shadow 80x4+3+3 \\)"
+                  << " +swap -background none -flatten"
+                  << " \"" << tmpShadow << "\"";
+        if (system(shadowCmd.str().c_str()) == 0)
+            activeLayer = tmpShadow;
+    }
+
+    // ── Query layer dimensions (panel and/or citation-below placement) ────
+    int layerW = 0, layerH = 0;
+    if (textPanelOpacity > 0 || (citeStyle != "none" && citePlacement == "below")) {
+        string identCmd = im + " identify -format \"%wx%h\" \"" + tmpLayer + "\"";
+        FILE* pipe = popen(identCmd.c_str(), "r");
+        if (pipe) {
+            char buf[64] = {};
+            fgets(buf, sizeof(buf), pipe);
+            pclose(pipe);
+            sscanf(buf, "%dx%d", &layerW, &layerH);
+        }
+    }
+
+    // ── Panel fragment ────────────────────────────────────────────────────
+    ostringstream panelDraw;
+    if (textPanelOpacity > 0 && layerW > 0 && layerH > 0) {
+        int panelH    = layerH;
+        int panelOffY = verseOffY;   // pixels above canvas center (positive = above)
+
+        if (citeStyle != "none" && citePlacement == "below") {
+            // Extend the panel down to enclose the citation.
+            int citeGap   = max(5,  (int)(12 * scale));
+            int bottomPad = max(5,  (int)(10 * scale));
+            int extraH    = citeGap + citePt + bottomPad;
+            panelH   += extraH;
+            panelOffY = verseOffY - extraH / 2;  // shift center down; may go negative (below canvas center)
+        }
+
+        panelDraw << " \\( -size " << layerW << "x" << panelH
+                  << " xc:\"" << textPanelColor << "\""
+                  << " -alpha set -channel Alpha -evaluate multiply "
+                  << (textPanelOpacity / 100.0) << " +channel \\)"
+                  << " -gravity Center"
+                  << (panelOffY >= 0 ? " -geometry +0-" : " -geometry +0+") << abs(panelOffY)
+                  << " -composite";
+
+        // For bottom citation placement, add a separate narrow panel behind the citation.
+        if (citeStyle != "none" && citePlacement == "bottom") {
+            int citePanelH   = citePt * 2;
+            int citePanelOff = max(0, citeOffY - citePt / 2);
+            panelDraw << " \\( -size " << layerW << "x" << citePanelH
+                      << " xc:\"" << textPanelColor << "\""
+                      << " -alpha set -channel Alpha -evaluate multiply "
+                      << (textPanelOpacity / 100.0) << " +channel \\)"
+                      << " -gravity South -geometry +0+" << citePanelOff
+                      << " -composite";
+        }
+    }
+
     // ── Citation annotation fragment ──────────────────────────────────────
-    //
-    // For "below" placement, query the trimmed layer height so the citation
-    // can be positioned just underneath the verse text block.
     ostringstream citeAnnot;
     if (citeStyle != "none") {
         citeAnnot << " -fill \""    << citeColor << "\""
@@ -576,15 +676,6 @@ int main(int argc, char* argv[]) {
                   << " -pointsize " << citePt;
 
         if (citePlacement == "below") {
-            int layerH = 0;
-            string identCmd = im + " identify -format \"%h\" \"" + tmpLayer + "\"";
-            FILE* pipe = popen(identCmd.c_str(), "r");
-            if (pipe) {
-                char buf[32] = {};
-                fgets(buf, sizeof(buf), pipe);
-                pclose(pipe);
-                layerH = atoi(buf);
-            }
             int citeGap = max(5, (int)(12 * scale));
             int offset  = -verseOffY + layerH / 2 + citeGap;
             citeAnnot << " -gravity Center"
@@ -607,7 +698,8 @@ int main(int argc, char* argv[]) {
         cmd2 << im
              << " -size " << imgWidth << "x" << imgHeight
              << " xc:\"" << bgColor << "\""
-             << " \"" << tmpLayer << "\""
+             << panelDraw.str()
+             << " \"" << activeLayer << "\""
              << " -gravity Center"
              << " -geometry +0-" << verseOffY
              << " -composite"
@@ -622,7 +714,8 @@ int main(int argc, char* argv[]) {
              << " -gravity Center"
              << " -extent " << imgWidth << "x" << imgHeight
              << " -fill black -colorize " << clampedDim
-             << " \"" << tmpLayer << "\""
+             << panelDraw.str()
+             << " \"" << activeLayer << "\""
              << " -gravity Center"
              << " -geometry +0-" << verseOffY
              << " -composite"
@@ -633,6 +726,7 @@ int main(int argc, char* argv[]) {
     int ret2 = system(cmd2.str().c_str());
 
     remove(tmpLayer.c_str());
+    if (textShadow) remove(tmpShadow.c_str());
 
     if (ret2 != 0) {
         cerr << "Error: image generation failed.\n\n";

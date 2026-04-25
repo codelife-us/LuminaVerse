@@ -1,6 +1,6 @@
 # bvi
 
-A C++ program that renders a Bible verse reference to a JPEG image with auto-fitted text. The verse is centered on the canvas with a citation line below.
+A C++ program that renders a Bible verse reference (or custom text) to a JPEG image with auto-fitted text. The verse is centered on the canvas with an optional citation line.
 
 ## Features
 
@@ -12,6 +12,7 @@ A C++ program that renders a Bible verse reference to a JPEG image with auto-fit
   - **BSB** (Berean Standard Bible)
   - **WEB** (World English Bible)
 - Verse ranges (`John 3:16-17`), verse-to-end-of-chapter (`Romans 8:28-`)
+- Custom text mode (`--text`) bypasses Bible lookup entirely
 - Configurable image size (default 1920×1080)
 - Configurable colors for background, verse text, and citation
 - Photo background support with adjustable dimming for text readability
@@ -21,6 +22,8 @@ A C++ program that renders a Bible verse reference to a JPEG image with auto-fit
 - Citation font size: absolute (`--citesize`) or relative to auto (`--citescale`)
 - Option to omit the Bible version from the citation (`--citebibleversion=no`)
 - Verse text size override: cap at an absolute point size (`--textsize`) or scale relative to the auto-fit (`--textscale`)
+- Semi-transparent panel behind verse text for readability (`--textpanel`)
+- Drop shadow behind verse text (`--textshadow`)
 - Custom font support
 - Config file (`.bvi`) stores per-folder defaults for version, size, colors, and style
 - Default output filename derived from the reference (e.g. `John_3_16.jpg`)
@@ -52,6 +55,12 @@ cl /EHsc /std:c++17 bvi.cpp /Fe:bvi.exe
 ./bvi "Romans 8:28-"
 ```
 
+The reference can also be passed with a named flag (consistent with `bv`):
+```bash
+./bvi --ref="John 3:16"
+./bvi -ref="Philippians 4:6-7"
+```
+
 Specify a Bible version:
 ```bash
 ./bvi "John 3:16" -bv=BSB
@@ -68,6 +77,23 @@ Change image dimensions:
 ./bvi "John 3:16" --width=1280 --height=720
 ./bvi "John 3:16" --width=1080 --height=1080
 ```
+
+## Custom Text
+
+Use `--text` to render arbitrary text instead of a Bible verse lookup. No Bible file is required.
+
+```bash
+./bvi --text="He is risen." --bg=black --textcolor=white
+./bvi --text="Peace be with you." --bgphoto=photo.jpg
+```
+
+The citation is suppressed automatically when `--text` is used without a reference. To show a citation alongside custom text, provide `-ref=`:
+
+```bash
+./bvi --text="He is risen." --ref="Luke 24:6"
+```
+
+The output filename defaults to `bvi_output.jpg` when no reference is given.
 
 ## Background
 
@@ -109,6 +135,42 @@ Add curly `"` `"` quotation marks around the verse text:
 ```bash
 ./bvi "John 3:16" --quotes
 ./bvi "John 3:16" --no-quotes   # explicitly off (default)
+```
+
+## Text Readability
+
+### Panel
+
+A semi-transparent colored rectangle drawn behind the verse text block improves contrast against photo backgrounds and on projector screens.
+
+```bash
+./bvi "John 3:16" --bgphoto=photo.jpg --textpanel=60
+./bvi "John 3:16" --bgphoto=photo.jpg --textpanel=70 --textpanelcolor="#001020"
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--textpanel=N` | `0` (off) | Panel opacity 1–100 |
+| `--textpanelcolor=COLOR` | `black` | Panel color; any ImageMagick color |
+
+**Panel and citation placement:**
+
+- `--citeplacement=below` — the panel automatically extends downward to enclose the citation as well as the verse text.
+- `--citeplacement=bottom` (default) — the main panel covers the verse text, and a separate narrow panel of the same color and opacity is drawn behind the citation at the bottom of the image.
+
+### Shadow
+
+A drop shadow behind the verse text adds depth and separation from the background.
+
+```bash
+./bvi "John 3:16" --bgphoto=photo.jpg --textshadow
+./bvi "John 3:16" --textshadow --no-textshadow   # explicitly off
+```
+
+Panel and shadow can be combined:
+
+```bash
+./bvi "John 3:16" --bgphoto=photo.jpg --textpanel=50 --textshadow
 ```
 
 ## Citation
@@ -240,9 +302,12 @@ citeplacement    = bottom
 citebibleversion = yes
 textsize         = 0
 textscale        = 100
+textpanel        = 0
+textpanelcolor   = black
+textshadow       = no
 ```
 
-Supported keys: `bv`, `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `citecolor`, `quotes`, `citesize`, `citescale`, `citestyle`, `citeplacement`, `citebibleversion`, `textsize`, `textscale`
+Supported keys: `bv`, `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `citecolor`, `quotes`, `citesize`, `citescale`, `citestyle`, `citeplacement`, `citebibleversion`, `textsize`, `textscale`, `textpanel`, `textpanelcolor`, `textshadow`
 
 ## Bible Translations
 
