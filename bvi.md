@@ -23,7 +23,7 @@ A C++ program that renders a Bible verse reference (or custom text) to a JPEG im
 - Citation font independent from verse font (`--citefont`)
 - Citation drop shadow (`--citeshadow`)
 - Option to omit the Bible version from the citation (`--citebibleversion=no`)
-- Verse text size override: cap at an absolute point size (`--textsize`) or scale relative to the auto-fit (`--textscale`)
+- Verse text size: force an absolute point size (`--textsize`), cap auto-fit at a maximum (`--maxtextsize`), or scale relative to auto-fit (`--textscale`)
 - Semi-transparent panel behind verse text for readability (`--textpanel`)
 - Drop shadow behind verse text (`--textshadow`)
 - Custom font support
@@ -240,7 +240,7 @@ Add a drop shadow behind the citation text:
 
 ### Size
 
-By default the citation point size is auto-scaled based on image height (~30pt at 1080p). Use one of these options to change it — they cannot be combined.
+By default the citation point size is auto-scaled based on image height (~60pt at 1080p). Use one of these options to change it — they cannot be combined.
 
 **`--citescale=PCT`** — scale the auto-calculated size by a percentage:
 
@@ -258,7 +258,7 @@ By default the citation point size is auto-scaled based on image height (~30pt a
 
 ## Verse Text Size
 
-By default the verse text auto-fits to the largest size that fills the canvas. Use one of these options to reduce it — they cannot be combined.
+By default the verse text auto-fits to the largest size that fills the canvas. Use one of these options to control the size — `--textsize`/`--maxtextsize` and `--textscale` cannot be combined.
 
 **`--textscale=PCT`** — shrink the text area to a percentage of its default size. The font still auto-fits within the smaller area, so the result is proportionally smaller text:
 
@@ -267,14 +267,20 @@ By default the verse text auto-fits to the largest size that fills the canvas. U
 ./bvi "John 3:16" --textscale=50    # ~half size
 ```
 
-**`--textsize=N`** / **`--maxfontsize=N`** — cap the verse font at a fixed point size. The font auto-fits up to that maximum and won't exceed it. `--maxfontsize` is an alias for `--textsize`.
+**`--maxtextsize=N`** — cap the auto-fit verse font at N points. The font fills the canvas up to that maximum and won't exceed it. If both `--textsize` and `--maxtextsize` are provided, `--maxtextsize` takes priority.
 
 At 1920×1080, typical auto-fit sizes by verse length: short verses (~50 chars) reach ~250pt; a median Luke verse (~111 chars) auto-fits to ~140pt; long passages (~200+ chars) drop to ~80pt. So **140pt** is a reasonable mid-range cap for typical single-verse use.
 
 ```bash
-./bvi "John 3:16" --maxfontsize=140
-./bvi "Philippians 4:6-7" --maxfontsize=100
+./bvi "Philippians 4:6-7" --maxtextsize=100
+./bvi "John 3:16" --maxtextsize=140
+```
+
+**`--textsize=N`** — force the verse font to exactly N points, bypassing auto-fit entirely. The text renders at N pt; very long passages may overflow the canvas.
+
+```bash
 ./bvi "John 3:16" --textsize=72
+./bvi --text="He is risen." --textsize=160
 ```
 
 ## Font
@@ -327,13 +333,14 @@ citeplacement    = bottom
 citebibleversion = yes
 citeshadow       = no
 textsize         = 0
+maxtextsize      = 0
 textscale        = 100
 textpanel        = 0
 textpanelcolor   = black
 textshadow       = no
 ```
 
-Supported keys: `bv`, `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `citecolor`, `citefont`, `quotes`, `citesize`, `citescale`, `citestyle`, `citeplacement`, `citebibleversion`, `citeshadow`, `textsize`, `textscale`, `textpanel`, `textpanelcolor`, `textshadow`
+Supported keys: `bv`, `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `citecolor`, `citefont`, `quotes`, `citesize`, `citescale`, `citestyle`, `citeplacement`, `citebibleversion`, `citeshadow`, `textsize`, `maxtextsize`, `textscale`, `textpanel`, `textpanelcolor`, `textshadow`
 
 ## Bible Translations
 
@@ -343,14 +350,14 @@ Supported keys: `bv`, `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textco
 
 If a Bible translation file is not found, the program will prompt you to download it automatically using `curl`.
 
-## Live Preview (bviview)
+## Live Preview (bvilive)
 
-`bviview` is a two-window GUI that renders a verse in real time as you type or navigate.
+`bvilive` is a two-window GUI that renders a verse in real time as you type or navigate.
 
 **Requirements:** Python 3 + Pillow (`pip install pillow`)
 
 ```bash
-./bviview
+./bvilive
 ```
 
 **Control window:**
@@ -363,7 +370,7 @@ If a Bible translation file is not found, the program will prompt you to downloa
 | ◀◀ Chap / ▶▶ Chap buttons | Step one chapter |
 | ◀ Verse / Verse ▶ buttons | Step one verse |
 | Version radio buttons | Switch KJV / BSB / WEB instantly |
-| Max font pt | Cap auto-fit font size (e.g. `140` for typical verse size) |
+| Max text pt | Cap auto-fit font size (e.g. `140` for typical verse size) |
 | Text scale % | Scale text area (e.g. `75` for smaller text) |
 | Cite style | `dash` / `parens` / `plain` / `none` |
 | Quotes checkbox | Toggle curly quotes |
@@ -373,7 +380,7 @@ Chapter and verse boundaries are respected using the loaded Bible file — navig
 ## Files
 
 - `bvi.cpp` — Source code
-- `bviview` — Live two-window preview script (Python 3 + Pillow)
+- `bvilive` — Live two-window preview script (Python 3 + Pillow)
 - `BibleKJV.txt` — KJV Bible text (shared with gospel, downloaded on first use)
 - `BibleBSB.txt` — BSB Bible text (shared with gospel, downloaded on first use)
 - `BibleWEB.txt` — WEB Bible text (shared with gospel, downloaded on first use)

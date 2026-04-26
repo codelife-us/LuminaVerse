@@ -225,12 +225,14 @@ void printHelp() {
     cout << "  --textscale=PCT         Scale verse text area to PCT% of default (e.g. 75); cannot combine with --textsize/--maxtextsize\n";
     cout << "  --textpanel=N           Semi-transparent panel behind text, N=opacity 1-100 (default: off)\n";
     cout << "  --textpanelcolor=COLOR  Panel color (default: black); any ImageMagick color\n";
+    cout << "  --textpanelrounded      Rounded corners on text panel\n";
+    cout << "  --no-textpanelrounded   Square corners (default)\n";
     cout << "  --textshadow            Add drop shadow behind verse text\n";
     cout << "  --no-textshadow         Remove drop shadow (default)\n\n";
     cout << "Config file (.bvi in current directory):\n";
     cout << "  --saveconfig            Save current settings to .bvi as new defaults\n";
     cout << "  --showconfig            Print current effective settings and exit\n\n";
-    cout << "  Supported keys in .bvi:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  citefont  quotes  citesize  citescale  citestyle  citeplacement  citebibleversion  citeshadow  textsize  maxtextsize  textscale  textpanel  textpanelcolor  textshadow\n\n";
+    cout << "  Supported keys in .bvi:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  citefont  quotes  citesize  citescale  citestyle  citeplacement  citebibleversion  citeshadow  textsize  maxtextsize  textscale  textpanel  textpanelcolor  textpanelrounded  textshadow\n\n";
     cout << "Requires:\n";
     cout << "  ImageMagick  —  brew install imagemagick\n\n";
     cout << "Examples:\n";
@@ -288,6 +290,7 @@ int main(int argc, char* argv[]) {
     int textPanelOpacity = stoi(cfgGet(cfg, "textpanel",     "0"));      // 0 = off
     string textPanelColor = cfgGet(cfg, "textpanelcolor",   "black");
     bool textShadow      = cfgGet(cfg, "textshadow",        "no") == "yes";
+    bool panelRounded    = cfgGet(cfg, "textpanelrounded",  "no") == "yes";
 
     bool saveConfig  = false;
     bool showConfig  = false;
@@ -358,6 +361,10 @@ int main(int argc, char* argv[]) {
             textShadow = true;
         } else if (arg == "--no-textshadow") {
             textShadow = false;
+        } else if (arg == "--textpanelrounded") {
+            panelRounded = true;
+        } else if (arg == "--no-textpanelrounded") {
+            panelRounded = false;
         } else if (arg.find("--ref=") == 0) {
             reference = arg.substr(6);
         } else if (arg.find("-ref=") == 0) {
@@ -423,6 +430,7 @@ int main(int argc, char* argv[]) {
         cout << "  textscale        = " << textScalePct << "%\n";
         cout << "  textpanel        = " << (textPanelOpacity > 0 ? to_string(textPanelOpacity) + "%" : "off") << "\n";
         cout << "  textpanelcolor   = " << textPanelColor << "\n";
+        cout << "  textpanelrounded = " << (panelRounded ? "yes" : "no") << "\n";
         cout << "  textshadow       = " << (textShadow ? "yes" : "no") << "\n";
         ifstream check(CONFIG_FILE);
         if (check.good())
@@ -462,6 +470,7 @@ int main(int argc, char* argv[]) {
         f << "textscale        = " << textScalePct  << "\n";
         f << "textpanel        = " << textPanelOpacity << "\n";
         f << "textpanelcolor   = " << textPanelColor   << "\n";
+        f << "textpanelrounded = " << (panelRounded ? "yes" : "no") << "\n";
         f << "textshadow       = " << (textShadow ? "yes" : "no") << "\n";
         cerr << "Saved defaults to ./" << CONFIG_FILE << "\n";
         return 0;
@@ -703,11 +712,21 @@ int main(int argc, char* argv[]) {
             panelOffY = verseOffY - extraH / 2;  // shift center down; may go negative (below canvas center)
         }
 
-        panelDraw << " \\( -size " << layerW << "x" << panelH
-                  << " xc:\"" << textPanelColor << "\""
-                  << " -alpha set -channel Alpha -evaluate multiply "
-                  << (textPanelOpacity / 100.0) << " +channel \\)"
-                  << " -gravity Center"
+        int cornerR = max(4, (int)(12 * scale));
+        if (panelRounded) {
+            panelDraw << " \\( -size " << layerW << "x" << panelH
+                      << " xc:none -fill \"" << textPanelColor << "\""
+                      << " -draw \"roundrectangle 0,0 " << (layerW-1) << "," << (panelH-1)
+                      << " " << cornerR << "," << cornerR << "\""
+                      << " -alpha set -channel Alpha -evaluate multiply "
+                      << (textPanelOpacity / 100.0) << " +channel \\)";
+        } else {
+            panelDraw << " \\( -size " << layerW << "x" << panelH
+                      << " xc:\"" << textPanelColor << "\""
+                      << " -alpha set -channel Alpha -evaluate multiply "
+                      << (textPanelOpacity / 100.0) << " +channel \\)";
+        }
+        panelDraw << " -gravity Center"
                   << (panelOffY >= 0 ? " -geometry +0-" : " -geometry +0+") << abs(panelOffY)
                   << " -composite";
 
@@ -715,12 +734,21 @@ int main(int argc, char* argv[]) {
         if (citeStyle != "none" && citePlacement == "bottom") {
             int citePad      = max(6, (int)(14 * scale));
             int citePanelH   = citePt + 2 * citePad;
-            int citePanelOff = max(0, citeOffY - citePt / 4 - citePad);
-            panelDraw << " \\( -size " << layerW << "x" << citePanelH
-                      << " xc:\"" << textPanelColor << "\""
-                      << " -alpha set -channel Alpha -evaluate multiply "
-                      << (textPanelOpacity / 100.0) << " +channel \\)"
-                      << " -gravity South -geometry +0+" << citePanelOff
+            int citePanelOff = max(0, citeOffY - citePad + (int)(4 * scale));
+            if (panelRounded) {
+                panelDraw << " \\( -size " << layerW << "x" << citePanelH
+                          << " xc:none -fill \"" << textPanelColor << "\""
+                          << " -draw \"roundrectangle 0,0 " << (layerW-1) << "," << (citePanelH-1)
+                          << " " << cornerR << "," << cornerR << "\""
+                          << " -alpha set -channel Alpha -evaluate multiply "
+                          << (textPanelOpacity / 100.0) << " +channel \\)";
+            } else {
+                panelDraw << " \\( -size " << layerW << "x" << citePanelH
+                          << " xc:\"" << textPanelColor << "\""
+                          << " -alpha set -channel Alpha -evaluate multiply "
+                          << (textPanelOpacity / 100.0) << " +channel \\)";
+            }
+            panelDraw << " -gravity South -geometry +0+" << citePanelOff
                       << " -composite";
         }
     }
