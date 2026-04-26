@@ -601,6 +601,33 @@ int main(int argc, char* argv[]) {
     // transparent background so it composites cleanly.
     string layerBg = (bgPhoto.empty() && !textShadow) ? bgColor : "none";
 
+    // When a max font size is requested, query the auto-fit pointsize first.
+    // caption: with -pointsize uses a fixed size, not a cap, so we only pass
+    // -pointsize when the auto-fit size actually exceeds the requested maximum.
+    bool applyPointsize = false;
+    if (textSizeOvr > 0) {
+        ostringstream qcmd;
+        qcmd << im
+             << " -background \"" << layerBg << "\""
+             << " -fill \""       << textColor << "\""
+             << " -font \""       << font << "\""
+             << " -gravity Center"
+             << " -size "         << verseW << "x" << verseH
+             << " caption:"       << quotedVerse
+             << " -verbose info:";
+        int autoFitSize = 0;
+        FILE* pipe = popen(qcmd.str().c_str(), "r");
+        if (pipe) {
+            char buf[256];
+            while (fgets(buf, sizeof(buf), pipe)) {
+                if (sscanf(buf, " caption:pointsize: %d", &autoFitSize) == 1)
+                    break;
+            }
+            pclose(pipe);
+        }
+        applyPointsize = (autoFitSize == 0 || autoFitSize > textSizeOvr);
+    }
+
     ostringstream cmd1;
     cmd1 << im
          << " -background \"" << layerBg << "\""
@@ -608,7 +635,7 @@ int main(int argc, char* argv[]) {
          << " -font \""       << font << "\""
          << " -gravity Center"                        // center-align each text line
          << " -size "         << verseW << "x" << verseH
-         << (textSizeOvr > 0 ? " -pointsize " + to_string(textSizeOvr) : "")
+         << (applyPointsize ? " -pointsize " + to_string(textSizeOvr) : "")
          << " caption:"      << quotedVerse
          << " -trim"                                  // crop to actual text bounds
          << " -bordercolor \"" << layerBg << "\""     // restore padding around text

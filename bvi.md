@@ -343,9 +343,37 @@ Supported keys: `bv`, `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textco
 
 If a Bible translation file is not found, the program will prompt you to download it automatically using `curl`.
 
+## Live Preview (bviview)
+
+`bviview` is a two-window GUI that renders a verse in real time as you type or navigate.
+
+**Requirements:** Python 3 + Pillow (`pip install pillow`)
+
+```bash
+./bviview
+```
+
+**Control window:**
+
+| Control | Action |
+|---|---|
+| Reference field | Type any reference; image updates after a short pause |
+| `↑` / `↓` arrow keys | Previous / next verse |
+| `Page Up` / `Page Down` | Previous / next chapter |
+| ◀◀ Chap / ▶▶ Chap buttons | Step one chapter |
+| ◀ Verse / Verse ▶ buttons | Step one verse |
+| Version radio buttons | Switch KJV / BSB / WEB instantly |
+| Max font pt | Cap auto-fit font size (e.g. `140` for typical verse size) |
+| Text scale % | Scale text area (e.g. `75` for smaller text) |
+| Cite style | `dash` / `parens` / `plain` / `none` |
+| Quotes checkbox | Toggle curly quotes |
+
+Chapter and verse boundaries are respected using the loaded Bible file — navigation wraps correctly at chapter ends and beginnings.
+
 ## Files
 
 - `bvi.cpp` — Source code
+- `bviview` — Live two-window preview script (Python 3 + Pillow)
 - `BibleKJV.txt` — KJV Bible text (shared with gospel, downloaded on first use)
 - `BibleBSB.txt` — BSB Bible text (shared with gospel, downloaded on first use)
 - `BibleWEB.txt` — WEB Bible text (shared with gospel, downloaded on first use)
