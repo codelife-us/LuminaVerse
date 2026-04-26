@@ -213,16 +213,16 @@ void printHelp() {
     cout << "  --citefont=FONT         Citation font name or path (default: same as verse font)\n";
     cout << "  --quotes                Wrap verse text in \xe2\x80\x9c\xe2\x80\x9d quotation marks\n";
     cout << "  --no-quotes             Remove quotation marks (default)\n";
-    cout << "  --citesize=N            Citation font size in points (default: auto ~30pt at 1080p)\n";
+    cout << "  --citesize=N            Citation font size in points (default: auto ~60pt at 1080p)\n";
     cout << "  --citescale=PCT         Scale citation size to PCT% of auto (e.g. 75); cannot combine with --citesize\n";
     cout << "  --citestyle=STYLE       dash (default): \xe2\x80\x94 Ref (Ver)  |  parens: (Ref, Ver)  |  plain: Ref (Ver)  |  none: omit citation\n";
     cout << "  --citeplacement=WHERE   bottom (default): near bottom edge  |  below: just under verse text\n";
     cout << "  --citebibleversion=VAL  yes (default): include Bible version in citation  |  no/false: omit it\n";
     cout << "  --citeshadow            Add drop shadow behind citation text\n";
     cout << "  --no-citeshadow         Remove citation drop shadow (default)\n";
-    cout << "  --textsize=N            Cap verse font at N points (absolute; cannot combine with --textscale)\n";
-    cout << "  --maxfontsize=N         Alias for --textsize (e.g. 140 is mid-range for typical Luke verses at 1080p)\n";
-    cout << "  --textscale=PCT         Scale verse text area to PCT% of default (e.g. 75); cannot combine with --textsize\n";
+    cout << "  --textsize=N            Force verse font to exactly N points (absolute; cannot combine with --textscale)\n";
+    cout << "  --maxtextsize=N         Cap auto-fit verse font at N points (e.g. 140 for typical verses at 1080p); overrides --textsize\n";
+    cout << "  --textscale=PCT         Scale verse text area to PCT% of default (e.g. 75); cannot combine with --textsize/--maxtextsize\n";
     cout << "  --textpanel=N           Semi-transparent panel behind text, N=opacity 1-100 (default: off)\n";
     cout << "  --textpanelcolor=COLOR  Panel color (default: black); any ImageMagick color\n";
     cout << "  --textshadow            Add drop shadow behind verse text\n";
@@ -230,7 +230,7 @@ void printHelp() {
     cout << "Config file (.bvi in current directory):\n";
     cout << "  --saveconfig            Save current settings to .bvi as new defaults\n";
     cout << "  --showconfig            Print current effective settings and exit\n\n";
-    cout << "  Supported keys in .bvi:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  citefont  quotes  citesize  citescale  citestyle  citeplacement  citebibleversion  citeshadow  textsize  textscale  textpanel  textpanelcolor  textshadow\n\n";
+    cout << "  Supported keys in .bvi:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  citefont  quotes  citesize  citescale  citestyle  citeplacement  citebibleversion  citeshadow  textsize  maxtextsize  textscale  textpanel  textpanelcolor  textshadow\n\n";
     cout << "Requires:\n";
     cout << "  ImageMagick  —  brew install imagemagick\n\n";
     cout << "Examples:\n";
@@ -282,7 +282,8 @@ int main(int argc, char* argv[]) {
     bool citeBibleVersion = (cfgGet(cfg, "citebibleversion", "yes") != "no" &&
                              cfgGet(cfg, "citebibleversion", "yes") != "false");
     bool citeShadow      = cfgGet(cfg, "citeshadow",       "no") == "yes";
-    int textSizeOvr      = stoi(cfgGet(cfg, "textsize",      "0"));      // 0 = off (no cap)
+    int textSizePt       = stoi(cfgGet(cfg, "textsize",      "0"));      // 0 = off; absolute fixed size
+    int maxTextSizePt    = stoi(cfgGet(cfg, "maxtextsize",   "0"));      // 0 = off; cap auto-fit
     int textScalePct     = stoi(cfgGet(cfg, "textscale",     "100"));    // 100 = fill canvas
     int textPanelOpacity = stoi(cfgGet(cfg, "textpanel",     "0"));      // 0 = off
     string textPanelColor = cfgGet(cfg, "textpanelcolor",   "black");
@@ -344,9 +345,9 @@ int main(int argc, char* argv[]) {
         } else if (arg == "--no-citeshadow") {
             citeShadow = false;
         } else if (arg.find("--textsize=") == 0) {
-            textSizeOvr = stoi(arg.substr(11));
-        } else if (arg.find("--maxfontsize=") == 0) {
-            textSizeOvr = stoi(arg.substr(14));
+            textSizePt = stoi(arg.substr(11));
+        } else if (arg.find("--maxtextsize=") == 0) {
+            maxTextSizePt = stoi(arg.substr(14));
         } else if (arg.find("--textscale=") == 0) {
             textScalePct = stoi(arg.substr(12));
         } else if (arg.find("--textpanel=") == 0) {
@@ -380,8 +381,8 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    if (textSizeOvr > 0 && textScalePct != 100) {
-        cerr << "Error: --textsize/--maxfontsize and --textscale cannot be used together.\n";
+    if ((textSizePt > 0 || maxTextSizePt > 0) && textScalePct != 100) {
+        cerr << "Error: --textsize/--maxtextsize and --textscale cannot be used together.\n";
         return 1;
     }
     if (citeSizeOvr > 0 && citeScalePct != 100) {
@@ -417,7 +418,8 @@ int main(int argc, char* argv[]) {
         cout << "  citeplacement    = " << citePlacement << "\n";
         cout << "  citebibleversion = " << (citeBibleVersion ? "yes" : "no") << "\n";
         cout << "  citeshadow       = " << (citeShadow ? "yes" : "no") << "\n";
-        cout << "  textsize         = " << (textSizeOvr > 0 ? to_string(textSizeOvr) : "off") << "\n";
+        cout << "  textsize         = " << (textSizePt    > 0 ? to_string(textSizePt)    : "off") << "\n";
+        cout << "  maxtextsize      = " << (maxTextSizePt > 0 ? to_string(maxTextSizePt) : "off") << "\n";
         cout << "  textscale        = " << textScalePct << "%\n";
         cout << "  textpanel        = " << (textPanelOpacity > 0 ? to_string(textPanelOpacity) + "%" : "off") << "\n";
         cout << "  textpanelcolor   = " << textPanelColor << "\n";
@@ -455,7 +457,8 @@ int main(int argc, char* argv[]) {
         f << "citeplacement    = " << citePlacement << "\n";
         f << "citebibleversion = " << (citeBibleVersion ? "yes" : "no") << "\n";
         f << "citeshadow       = " << (citeShadow ? "yes" : "no") << "\n";
-        f << "textsize         = " << textSizeOvr   << "\n";
+        f << "textsize         = " << textSizePt     << "\n";
+        f << "maxtextsize      = " << maxTextSizePt  << "\n";
         f << "textscale        = " << textScalePct  << "\n";
         f << "textpanel        = " << textPanelOpacity << "\n";
         f << "textpanelcolor   = " << textPanelColor   << "\n";
@@ -572,7 +575,7 @@ int main(int argc, char* argv[]) {
     int verseOffY = (citeStyle == "none") ? 0 : (int)(40 * scale);  // pixels above image center
 
     // Citation: fixed point size, placed near the bottom edge.
-    int citePt    = (citeSizeOvr > 0) ? citeSizeOvr : max(1, (int)(30 * scale * citeScalePct / 100.0)); // ~30pt at 1080p
+    int citePt    = (citeSizeOvr > 0) ? citeSizeOvr : max(1, (int)(60 * scale * citeScalePct / 100.0)); // ~60pt at 1080p
     int citeOffY  = max(20, (int)(55 * scale)); // pixels inward from bottom edge
 
     // Temp file for the intermediate verse layer PNG.
@@ -601,11 +604,13 @@ int main(int argc, char* argv[]) {
     // transparent background so it composites cleanly.
     string layerBg = (bgPhoto.empty() && !textShadow) ? bgColor : "none";
 
-    // When a max font size is requested, query the auto-fit pointsize first.
-    // caption: with -pointsize uses a fixed size, not a cap, so we only pass
-    // -pointsize when the auto-fit size actually exceeds the requested maximum.
-    bool applyPointsize = false;
-    if (textSizeOvr > 0) {
+    // Determine whether and at what size to pass -pointsize to caption:.
+    // caption: with -pointsize uses a fixed/max size rather than auto-filling,
+    // so for maxtextsize we only clamp when the auto-fit size would exceed the cap.
+    bool applyPointsize  = false;
+    int  applyPointsizeN = 0;
+    if (maxTextSizePt > 0) {
+        // Cap: query auto-fit first, apply -pointsize only if it would exceed the cap.
         ostringstream qcmd;
         qcmd << im
              << " -background \"" << layerBg << "\""
@@ -625,7 +630,12 @@ int main(int argc, char* argv[]) {
             }
             pclose(pipe);
         }
-        applyPointsize = (autoFitSize == 0 || autoFitSize > textSizeOvr);
+        applyPointsize  = (autoFitSize == 0 || autoFitSize > maxTextSizePt);
+        applyPointsizeN = maxTextSizePt;
+    } else if (textSizePt > 0) {
+        // Absolute: always render at exactly the requested point size; no query needed.
+        applyPointsize  = true;
+        applyPointsizeN = textSizePt;
     }
 
     ostringstream cmd1;
@@ -635,7 +645,7 @@ int main(int argc, char* argv[]) {
          << " -font \""       << font << "\""
          << " -gravity Center"                        // center-align each text line
          << " -size "         << verseW << "x" << verseH
-         << (applyPointsize ? " -pointsize " + to_string(textSizeOvr) : "")
+         << (applyPointsize ? " -pointsize " + to_string(applyPointsizeN) : "")
          << " caption:"      << quotedVerse
          << " -trim"                                  // crop to actual text bounds
          << " -bordercolor \"" << layerBg << "\""     // restore padding around text
@@ -685,9 +695,10 @@ int main(int argc, char* argv[]) {
 
         if (citeStyle != "none" && citePlacement == "below") {
             // Extend the panel down to enclose the citation.
-            int citeGap   = max(5,  (int)(12 * scale));
-            int bottomPad = max(5,  (int)(10 * scale));
-            int extraH    = citeGap + citePt + bottomPad;
+            // visibleGap = gap from verse layer bottom to citation text TOP.
+            int visibleGap = max(8,  (int)(16 * scale));
+            int bottomPad  = max(12, (int)(28 * scale));
+            int extraH     = visibleGap + citePt + bottomPad;
             panelH   += extraH;
             panelOffY = verseOffY - extraH / 2;  // shift center down; may go negative (below canvas center)
         }
@@ -702,8 +713,9 @@ int main(int argc, char* argv[]) {
 
         // For bottom citation placement, add a separate narrow panel behind the citation.
         if (citeStyle != "none" && citePlacement == "bottom") {
-            int citePanelH   = citePt * 2;
-            int citePanelOff = max(0, citeOffY - citePt / 2);
+            int citePad      = max(6, (int)(14 * scale));
+            int citePanelH   = citePt + 2 * citePad;
+            int citePanelOff = max(0, citeOffY - citePt / 4 - citePad);
             panelDraw << " \\( -size " << layerW << "x" << citePanelH
                       << " xc:\"" << textPanelColor << "\""
                       << " -alpha set -channel Alpha -evaluate multiply "
@@ -720,8 +732,10 @@ int main(int argc, char* argv[]) {
         int shadowOff = max(2, (int)(3 * scale));
 
         if (citePlacement == "below") {
-            int citeGap = max(5, (int)(12 * scale));
-            int offset  = -verseOffY + layerH / 2 + citeGap;
+            // Place baseline so citation text TOP lands visibleGap below the verse layer.
+            // citePt * 3/4 approximates the ascent so the gap is independent of citation size.
+            int visibleGap = max(8, (int)(16 * scale));
+            int offset     = -verseOffY + layerH / 2 + visibleGap + citePt * 3 / 4;
 
             if (citeShadow) {
                 int shadowY = offset + shadowOff;
