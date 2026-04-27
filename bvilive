@@ -18,23 +18,29 @@ except ImportError:
     print("Pillow is required: pip install pillow")
     sys.exit(1)
 
-BVI     = str(Path(__file__).parent / "bvi")
-BIBLES  = {"KJV": "BibleKJV.txt", "BSB": "BibleBSB.txt", "WEB": "BibleWEB.txt"}
-TMP_JPG = tempfile.mktemp(suffix=".jpg", prefix="bvilive_")
+BVI         = str(Path(__file__).parent / "bvi")
+BIBLES      = {"KJV": "BibleKJV.txt", "BSB": "BibleBSB.txt", "WEB": "BibleWEB.txt"}
+TMP_JPG     = tempfile.mktemp(suffix=".jpg", prefix="bvilive_")
+CONFIG_FILE = ".luminaverse"
 
 PREVIEW_W = 960   # display width  (half of default 1920)
 PREVIEW_H = 540   # display height (half of default 1080)
 
 
-def load_bvi_config(path: str = ".bvi") -> dict:
-    """Parse a .bvi key=value config file, mirroring bvi.cpp's loadConfig()."""
+def load_bvi_config(path: str = CONFIG_FILE) -> dict:
+    """Parse the [bvi] section of .luminaverse, mirroring bvi.cpp's loadConfig()."""
     cfg: dict = {}
     try:
         with open(path, encoding="utf-8-sig") as fh:
+            in_section = False
             for line in fh:
-                line = line.rstrip("\r\n")
-                line = line.lstrip(" \t")
-                if not line or line.startswith("#"):
+                line = line.rstrip("\r\n").lstrip(" \t")
+                if line.startswith("["):
+                    end = line.find("]")
+                    sec = line[1:end] if end != -1 else ""
+                    in_section = (sec == "bvi")
+                    continue
+                if not in_section or not line or line.startswith("#"):
                     continue
                 eq = line.find("=")
                 if eq == -1:
@@ -77,30 +83,39 @@ THEME_KEYS = [
 
 
 def find_bvilive_path() -> str:
-    """Return the .bvilive path to use: local if present, else $HOME if present, else local."""
-    local = ".bvilive"
+    """Return the .luminaverse path to use: local if present, else $HOME if present, else local."""
+    local = CONFIG_FILE
     if os.path.exists(local):
         return local
-    home = os.path.join(os.path.expanduser("~"), ".bvilive")
+    home = os.path.join(os.path.expanduser("~"), CONFIG_FILE)
     if os.path.exists(home):
         return home
     return local
 
 
 def load_bvilive_state(path: str) -> dict:
-    """Parse .bvilive → {last_ref, default_theme, themes:{name:{key:val}}}."""
+    """Parse [bvilive] section of .luminaverse → {last_ref, default_theme, themes:{name:{key:val}}}."""
     state: dict = {"last_ref": "", "default_theme": "", "themes": {}}
     try:
         with open(path, encoding="utf-8-sig") as fh:
+            in_section = False
             current: str | None = None
             for line in fh:
                 line = line.rstrip("\r\n").lstrip(" \t")
-                if not line or line.startswith("#"):
+                if line.startswith("["):
+                    end = line.find("]")
+                    sec = line[1:end] if end != -1 else ""
+                    if ":" not in sec:
+                        in_section = (sec == "bvilive")
+                        current = None
+                        continue
+                    if in_section:
+                        m = re.match(r'^\[theme:(.+)\]$', line)
+                        if m:
+                            current = m.group(1)
+                            state["themes"].setdefault(current, {})
                     continue
-                m = re.match(r'^\[theme:(.+)\]$', line)
-                if m:
-                    current = m.group(1)
-                    state["themes"].setdefault(current, {})
+                if not in_section or not line or line.startswith("#"):
                     continue
                 eq = line.find("=")
                 if eq == -1:
@@ -118,20 +133,57 @@ def load_bvilive_state(path: str) -> dict:
 
 
 def save_bvilive_state(path: str, state: dict):
-    """Write .bvilive from state dict."""
-    lines = ["# bvilive state\n"]
+    """Write [bvilive] section of .luminaverse, preserving all other sections."""
+    new_lines: list[str] = []
     if state.get("last_ref"):
-        lines.append(f"last_ref = {state['last_ref']}\n")
+        new_lines.append(f"last_ref = {state['last_ref']}\n")
     if state.get("default_theme"):
-        lines.append(f"default_theme = {state['default_theme']}\n")
+        new_lines.append(f"default_theme = {state['default_theme']}\n")
     if "half_size" in state:
-        lines.append(f"half_size = {state['half_size']}\n")
+        new_lines.append(f"half_size = {state['half_size']}\n")
     for name in sorted(state["themes"]):
-        lines.append(f"\n[theme:{name}]\n")
+        new_lines.append(f"\n[theme:{name}]\n")
         for k, v in state["themes"][name].items():
-            lines.append(f"{k} = {v}\n")
+            new_lines.append(f"{k} = {v}\n")
+
+    before: list[str] = []
+    after: list[str] = []
+    in_target = False
+    found = False
+    try:
+        with open(path, encoding="utf-8-sig") as fh:
+            for line in fh:
+                stripped = line.rstrip("\r\n").lstrip(" \t")
+                if stripped.startswith("["):
+                    end = stripped.find("]")
+                    sec = stripped[1:end] if end != -1 else ""
+                    if ":" not in sec:
+                        if sec == "bvilive":
+                            in_target = True
+                            found = True
+                            continue
+                        else:
+                            in_target = False
+                if in_target:
+                    continue
+                (after if found else before).append(line)
+    except FileNotFoundError:
+        pass
+
+    while before and not before[-1].strip():
+        before.pop()
+    while after and not after[0].strip():
+        after.pop(0)
+
     with open(path, "w", encoding="utf-8") as fh:
-        fh.writelines(lines)
+        fh.writelines(before)
+        if before:
+            fh.write("\n")
+        fh.write("[bvilive]\n")
+        fh.writelines(new_lines)
+        if after:
+            fh.write("\n")
+            fh.writelines(after)
 
 
 def load_verse_index(bible_dir: Path, filename: str) -> dict:
@@ -526,18 +578,24 @@ class BviView:
             save_bvilive_state(self._bvilive_path, self._bvilive_state)
 
     def _browse_font(self):
+        current = self.font_var.get()
+        init_dir = os.path.dirname(current) if current and os.path.exists(os.path.dirname(current)) else "/"
         path = filedialog.askopenfilename(
             parent=self.root,
             title="Select font file",
+            initialdir=init_dir,
             filetypes=[("Font files", "*.ttf *.otf *.ttc"),
                        ("All files", "*.*")])
         if path:
             self.font_var.set(path)
 
     def _browse_citefont(self):
+        current = self.citefont_var.get() or self.font_var.get()
+        init_dir = os.path.dirname(current) if current and os.path.exists(os.path.dirname(current)) else "/"
         path = filedialog.askopenfilename(
             parent=self.root,
             title="Select citation font file",
+            initialdir=init_dir,
             filetypes=[("Font files", "*.ttf *.otf *.ttc"),
                        ("All files", "*.*")])
         if path:
@@ -688,7 +746,7 @@ class BviView:
                 cmd.append(f"--dim={dim}")
         cmd.append("--textshadow" if self.textshadow_var.get() else "--no-textshadow")
         tp = self.textpanel_var.get().strip()
-        if re.fullmatch(r'\d+', tp) and int(tp) > 0:
+        if re.fullmatch(r'\d+', tp):
             cmd.append(f"--textpanel={tp}")
         cmd.append("--textpanelrounded" if self.panelrounded_var.get() else "--no-textpanelrounded")
         cmd.append(f"--citebibleversion={'yes' if self.citebibleversion_var.get() else 'no'}")
