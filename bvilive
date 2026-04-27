@@ -834,9 +834,8 @@ class BviView:
 
     def _display_image(self, img: "Image.Image"):
         if self.half_size_var.get():
-            scale = min(PREVIEW_W / img.width, PREVIEW_H / img.height, 0.5)
-            disp_w = max(1, int(img.width  * scale))
-            disp_h = max(1, int(img.height * scale))
+            disp_w = max(1, img.width  // 2)
+            disp_h = max(1, img.height // 2)
             img = img.resize((disp_w, disp_h), Image.LANCZOS)
         else:
             disp_w, disp_h = img.width, img.height
