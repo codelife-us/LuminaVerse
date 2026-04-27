@@ -121,7 +121,8 @@ Full docs: [fontlist.md](fontlist.md)
 
 ### [day](day.md)
 
-Prints the current day of the year and opens a YouTube search for that day's Bible Recap. Use `-d` to print the day number only.
+Prints the current day of the year and opens a YouTube search for today's video in the browser.
+Update the .day file for your own custom daily query string.
 
 ```bash
 ./day                # open YouTube search for today's video
