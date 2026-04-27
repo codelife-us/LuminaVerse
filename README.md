@@ -1,405 +1,180 @@
-# gospel
+# LuminaVerse
 
-A C++ program that displays various gospel presentation tracts, biblical frameworks for sharing the Gospel of Jesus Christ. The program presents different gospel presentations with biblical explanations and references. The `--ref` option outputs Bible references directly without a tract.
+A collection of tools for reading, sharing, and visualizing Scripture.
 
-## Features
+All tools share the same three Bible translation files (`BibleKJV.txt`, `BibleBSB.txt`, `BibleWEB.txt`) and look for them first in the current directory, then in `$HOME`. Any tool will prompt to download a missing file automatically via `curl`.
 
-- Support for multiple gospel presentation tracts/styles
-- Currently includes four tracts: "The Romans Road" (default), "Somebody Loves You", "Have A Good Day", and "Are You Ready"
-- Easy to add new tracts by extending the code
-- Display tract content with biblical explanations
-- Support for multiple Bible translations:
-  - **KJV** (King James Version) - default
-  - **BSB** (Berean Standard Bible)
-  - **WEB** (World English Bible)
-- Look up individual Bible verses, verse ranges, verse-to-end-of-chapter, or entire chapters directly with `--ref`
-- Multiple references supported using comma separation
-- Optional verse numbers prefixed to each verse with `--versenumbers` / `-vn`
-- Each verse on its own line with `--versenewline` / `-vnl`
-- Optional book and chapter header when outputting a full chapter with `--chapterheader` / `-ch`
-- Configurable citation style: new line, inline, or parentheses (`--refstyle=1–4`)
-- Optional curly quotes around verse text with `--versequotes`
-- Italics for verse output opt-in with `--italic` (tract inline refs stay italic by default)
-- Shorthand multi-reference: `"Psalm 7, 27"` is the same as `"Psalm 7, Psalm 27"`
-- Save output to a file with `--output=`, including PDF and EPUB via pandoc
-- PDF font control: custom font (`--pdffont=`), size as percentage (`--pdffontsize=`), and margin (`--pdfmargin=`)
-- Print PDF directly to printer with `--print`
-- EPUB output with embedded title metadata and optional cover image via `--titlegraphic`
-- EPUB automatically appends `gospel_epub_add.txt` if present, with QR code generated from any URL on the last line (requires `qrencode`)
-- Batch export every tract in every Bible version as `.txt`, `.md`, `.pdf`, and `.epub` with `--outputall`
-- Command-line configurable tract name and Bible version
-- Invalid command line options are reported with an error
-- Auto-prompts to download the Bible translation file if not found
-- Persistent config file (`.gospel`) to save default settings with `--saveconfig`
-- View effective settings (config + command-line) with `--showconfig`
+---
 
-## Building
+## Programs
 
-**macOS / Linux:**
+### [gospelshare](gospelshare.md)
+
+Outputs gospel presentation tracts — biblical frameworks for sharing the Gospel of Jesus Christ. Supports multiple tract styles, Bible versions, and output formats including plain text, Markdown, PDF, and EPUB.
+
 ```bash
-g++ -std=c++11 -o gospel gospel.cpp
+./gospelshare                            # default tract (Romans Road) in KJV
+./gospelshare -tn="Somebody Loves You" -bv=BSB
+./gospelshare --output=tract.pdf
+./gospelshare --ref="John 3:16"         # look up a verse directly
 ```
 
-**Windows (MSVC):**
-```bat
-cl /EHsc /std:c++17 /utf-8 gospel.cpp /Fe:gospel.exe
-```
+Config file: `.gospelshare` | Full docs: [gospelshare.md](gospelshare.md)
 
-**Windows (MinGW / MSYS2):**
+---
+
+### [bv](bv.md)
+
+Lightweight Bible verse lookup. Look up any reference, verse range, or full chapter and print it to stdout. Also supports daily reading plans and opening references on ESV.org.
+
 ```bash
-g++ -std=c++11 -o gospel.exe gospel.cpp
+./bv --ref="John 3:16"
+./bv --ref="Romans 8:28-" -bv=BSB       # verse to end of chapter
+./bv --ref="Romans 8" -vn               # full chapter with verse numbers
+./bv -d                                 # today's reading from the Chronological plan
+./bv --ref="John 3:16" -e              # open on ESV.org
 ```
 
-## Usage
+Config file: `.gospel` | Full docs: [bv.md](bv.md)
 
-Show help information:
+---
+
+### [bvi](bvi.md)
+
+Renders a Bible verse (or custom text) as a JPEG image. Auto-fits the font size to the canvas. Supports solid color or photo backgrounds, citation styles, drop shadows, and semi-transparent text panels.
+
 ```bash
-./gospel -h
-./gospel --help
+./bvi "John 3:16"
+./bvi "Philippians 4:6-7" -bv=BSB --output=phil.jpg
+./bvi "John 3:16" --bgphoto=sunset.jpg --dim=40
+./bvi --text="He is risen." --bg=black --textcolor=white
 ```
 
-Show version information:
+Config file: `.bvi` | Full docs: [bvi.md](bvi.md)
+
+---
+
+### bvilive
+
+A two-window live preview GUI for `bvi`. Type a reference and the image updates in real time. Navigate by verse or chapter with arrow keys; switch Bible versions with radio buttons.
+
 ```bash
-./gospel -v
-./gospel --version
+./bvilive
 ```
 
-Run with default KJV translation and default tract:
+Requires Python 3 + Pillow (`pip install pillow`). Documented in [bvi.md](bvi.md).
+
+---
+
+### [biblereader](biblereader.md)
+
+Opens a full Bible reader in your browser via a local HTTP server. Click any verse to copy its reference (or text) to the clipboard. The last selected reference is printed to stdout on quit, making it composable with other tools.
+
 ```bash
-./gospel
+./biblereader
+./biblereader -bv=BSB
+./bvi "$(./biblereader)"               # pick a verse in browser, render as image
 ```
 
-Specify a different Bible version:
+Full docs: [biblereader.md](biblereader.md)
+
+---
+
+### [versepick](versepick.md)
+
+Terminal arrow-key Bible browser. Navigate books → chapters → verses; press Enter to copy the reference (or verse text) to the clipboard.
+
 ```bash
-./gospel -bv=BSB
-./gospel -bv=WEB
-./gospel --bibleversion=BSB
+./versepick
+./versepick --verse -bv=BSB            # copy verse text instead of reference
+./bvi "$(./versepick)"                 # pick a verse, render as image
 ```
 
-Specify a different tract presentation:
+Full docs: [versepick.md](versepick.md)
+
+---
+
+### [colorpick](colorpick.md)
+
+Interactive terminal color picker. Navigate a hue × saturation grid with arrow keys, adjust brightness, and press Enter. Prints the chosen color as `#RRGGBB` to stdout. The TUI draws to stderr so the result composes cleanly in shell substitution.
+
 ```bash
-./gospel -tn="The Romans Road"
-./gospel --tractname="The Romans Road"
+./bvi "John 3:16" --bg=$(./colorpick) --textcolor=$(./colorpick)
 ```
 
-Combine tract and Bible version options:
+Full docs: [colorpick.md](colorpick.md)
+
+---
+
+### [fontlist](fontlist.md)
+
+Browser-based font browser for macOS. Scans system font directories, shows a searchable grid of previews, and prints the selected font path to stdout on exit.
+
 ```bash
-./gospel -tn="The Romans Road" -bv=BSB
-./gospel --tractname="The Romans Road" --bibleversion=WEB
+./fontlist --sample="For God so loved the world"
+./bvi "John 3:16" --font="$(./fontlist)"
 ```
 
-Output as Markdown:
+Full docs: [fontlist.md](fontlist.md)
+
+---
+
+### [day](day.md)
+
+Prints the current day of the year and opens a YouTube search for that day's Bible Recap. Use `-d` to print the day number only.
+
 ```bash
-./gospel --outputtype=md > romansroad.md
+./day                # open YouTube Bible Recap for today
+./day -d             # print day number only
+./day && ./bv -d     # open Bible Recap and print today's reading plan
 ```
 
-Look up a single Bible reference directly (bypasses tract output):
+Full docs: [day.md](day.md)
+
+---
+
+## Shared Bible Files
+
+All tools use the same translation files:
+
+| Version | File | Source |
+|---------|------|--------|
+| KJV (default) | `BibleKJV.txt` | openbible.com |
+| BSB | `BibleBSB.txt` | bereanbible.com |
+| WEB | `BibleWEB.txt` | openbible.com |
+
+Files are looked up in the current directory first, then `$HOME`. Any tool will prompt to download a missing file automatically using `curl`.
+
+---
+
+## Common Workflows
+
+**Pick a verse in the browser and render it as an image:**
 ```bash
-./gospel --ref="John 3:16"
-./gospel --ref="Romans 10:9-10" -bv=BSB
+./bvi "$(./biblereader)"
 ```
 
-Look up multiple references using a comma to separate each:
+**Browse interactively in the terminal and render:**
 ```bash
-./gospel --ref="John 3:16,Romans 5:8"
-./gospel --ref="Romans 3:23,Romans 6:23,Romans 10:9-10"
+./bvi "$(./versepick)"
 ```
 
-Look up from a verse to the end of the chapter (omit the ending number after the dash):
+**Pick colors interactively for a verse image:**
 ```bash
-./gospel --ref="Romans 8:20-"
-./gospel --ref="John 3:16-" -bv=BSB
+./bvi "John 3:16" --bg=$(./colorpick) --textcolor=$(./colorpick) --citecolor=$(./colorpick)
 ```
 
-Look up an entire chapter:
+**Pick a font from the browser and use it in an image:**
 ```bash
-./gospel --ref="Romans 8"
-./gospel --ref="John 3" -bv=WEB
+./bvi "John 3:16" --font="$(./fontlist)"
 ```
 
-Look up multiple references using shorthand (book name carries forward):
+**Open today's search on youtube and view today's reading plan from esv.org in the browser:**
 ```bash
-./gospel --ref="Psalm 7, 27"          # same as "Psalm 7, Psalm 27"
-./gospel --ref="1 John 4:9, 19, 5:1"  # same as "1 John 4:9, 1 John 19, 1 John 5:1"
+./day && ./bv -d -e
 ```
 
-Show verse numbers prefixed to each verse:
+**Export a gospel tract as PDF and print it:**
 ```bash
-./gospel --ref="Romans 8" --versenumbers
-./gospel --ref="John 3:16,Romans 5:8" -vn
+./gospelshare --output=tract.pdf --print
 ```
-
-Start each verse on its own line:
-```bash
-./gospel --ref="Romans 8" --versenewline
-./gospel --ref="Romans 8" -vn -vnl
-```
-
-Print the book and chapter as a header when outputting a full chapter:
-```bash
-./gospel --ref="Romans 8" --chapterheader
-./gospel --ref="Romans 8" -ch -vn -vnl
-```
-
-Wrap verse text in curly quotes:
-```bash
-./gospel --ref="John 3:16" --versequotes
-```
-
-Change the citation style (default is style 1):
-```bash
-# Style 1 (default): citation on its own line below the verse
-./gospel --ref="John 3:16" --refstyle=1
-
-# Style 2: citation inline, separated by a dash
-./gospel --ref="John 3:16" --refstyle=2
-
-# Style 3: reference in parentheses (no version)
-./gospel --ref="John 3:16" --refstyle=3
-
-# Style 4: reference and version in parentheses
-./gospel --ref="John 3:16" --refstyle=4
-```
-
-Style 1 output example:
-```
-For God so loved the world...
-— John 3:16 (KJV)
-```
-
-Style 2 output example:
-```
-For God so loved the world... - John 3:16 (KJV)
-```
-
-Style 3 output example:
-```
-For God so loved the world... (John 3:16)
-```
-
-Style 4 output example:
-```
-For God so loved the world... (John 3:16 (KJV))
-```
-
-Italicize verse output in `--ref` mode (off by default):
-```bash
-./gospel --ref="John 3:16" --italic
-```
-
-Save output to a file:
-```bash
-./gospel --output=romansroad.txt
-./gospel --outputtype=md --output=romansroad.md
-```
-
-Save output as PDF (requires pandoc):
-```bash
-./gospel --output=romansroad.pdf
-./gospel --ref="John 3:16,Romans 5:8" --output=verses.pdf
-```
-
-Print the PDF directly after generating:
-```bash
-./gospel --output=verse.pdf --print
-./gospel --ref="John 3:16" --output=verse.pdf --print
-```
-
-Save output as EPUB (requires pandoc):
-```bash
-./gospel --output=romansroad.epub
-./gospel -tn="Somebody Loves You" --output=sly.epub
-```
-
-Save EPUB with a cover image (auto-named `{tractname}_1.jpg` by default):
-```bash
-./gospel --output=romansroad.epub --titlegraphic
-./gospel --output=romansroad.epub --titlegraphic=mycover.jpg
-```
-
-The tract name is embedded as the EPUB title metadata. If `gospel_epub_add.txt` exists in the current directory, its contents are appended to the EPUB. If the last line of that file is a URL, a QR code is generated and included (requires `qrencode`):
-```bash
-brew install qrencode   # macOS
-apt install qrencode    # Linux
-```
-
-Batch export all tracts in all Bible versions as `.txt`, `.md`, `.pdf`, and `.epub`:
-```bash
-./gospel --outputall
-./gospel --outputall --titlegraphic   # include cover images in EPUBs
-```
-
-Files are saved in the current directory using the naming pattern `tractname_VERSION.ext` (tract name lowercased, spaces removed), for example:
-```
-theromansroad_KJV.txt
-theromansroad_KJV.md
-theromansroad_KJV.pdf
-theromansroad_KJV.epub
-haveagoodday_BSB.txt
-...
-```
-
-Bible versions are skipped silently if their translation file is not present. PDF and EPUB generation require pandoc (EPUB does not need a LaTeX engine). PDF font and margin options (`--pdffont=`, `--pdfmargin=`, `--pdffontsize=`) apply to all generated PDFs.
-
-To set or fix the default printer:
-
-**macOS / Linux:**
-```bash
-lpoptions -d YourPrinterName   # set default printer
-lpstat -p                      # list available printers
-rm ~/.cups/lpoptions           # clear stale printer config if lpr errors occur
-```
-
-**Windows:** printing uses PowerShell `Start-Process -Verb Print` with your default PDF viewer.
-
-Control the PDF margin (default is `0.5in`):
-```bash
-./gospel --output=romansroad.pdf --pdfmargin=0.75in
-./gospel --output=romansroad.pdf --pdfmargin=2cm
-```
-
-Set a custom PDF font size as a percentage of the default (11pt base):
-```bash
-./gospel --output=romansroad.pdf --pdffontsize=120    # 120% → 13pt
-./gospel --output=romansroad.pdf --pdffontsize=150    # 150% → 17pt
-```
-
-Color specific words or phrases in PDF output using HTML span tags in the tract data:
-```cpp
-"<span style=\"color: red;\">word</span>"        // named color
-"<span style=\"color: #C0392B;\">word</span>"    // hex color
-```
-Colors are converted to LaTeX `\textcolor` automatically when generating a PDF.
-
-Set a custom PDF font (requires xelatex):
-```bash
-./gospel --output=romansroad.pdf --pdffont="Georgia"
-./gospel --output=romansroad.pdf --pdffont="Times New Roman"
-```
-
-Default fonts by platform: `Palatino` (macOS), `Palatino Linotype` (Windows), none/system default (Linux).
-
-> **Linux note:** Palatino is not installed by default on Linux. The closest available equivalent included with texlive is `TeX Gyre Pagella`:
-> ```bash
-> ./gospel --output=romansroad.pdf --pdffont="TeX Gyre Pagella"
-> ```
-
-Install xelatex if needed:
-```bash
-# macOS / Linux
-sudo tlmgr install xetex
-
-# Windows
-winget install MiKTeX.MiKTeX   # includes xelatex
-```
-
-If pandoc or a LaTeX engine is not installed the program will tell you how to install them and show the manual alternative:
-```bash
-./gospel --outputtype=md | pandoc -f markdown -o output.pdf
-```
-
-Install pandoc and a LaTeX engine:
-```bash
-# macOS
-brew install pandoc && brew install --cask basictex
-sudo tlmgr update --self
-
-# Linux
-apt install pandoc texlive
-
-# Windows
-winget install JohnMacFarlane.Pandoc
-winget install MiKTeX.MiKTeX
-```
-
-> **macOS note:** After installing basictex, open a new Terminal window before running gospel. The `pdflatex` command is added to your PATH at login and will not be found in an existing Terminal session.
-
-> **Windows note:** `curl` is built into Windows 10 and later and is used to download Bible translation files automatically. On Windows, `--print` uses PowerShell to send the PDF to your default printer.
-
-## Configuration File
-
-gospel reads defaults from a `.gospel` file in the current directory. Command-line arguments always override the config file.
-
-Supported keys: `bv`, `tractname`, `refstyle`, `pdfmargin`, `pdffont`, `pdffontsize`, `outputtype`
-
-Save current settings as new defaults:
-```bash
-./gospel -bv=BSB --refstyle=2 --saveconfig
-```
-
-This writes a `.gospel` file like:
-```
-# gospel configuration — generated by gospel --saveconfig
-bv          = BSB
-tractname   = The Romans Road
-refstyle    = 2
-pdfmargin   = 0.5in
-pdffont     = Palatino
-pdffontsize = 100
-```
-
-Print the effective settings (config file + any command-line overrides) and exit:
-```bash
-./gospel --showconfig
-./gospel -bv=WEB --showconfig    # preview what would be used without running
-```
-
-To reset to built-in defaults, delete the config file:
-```bash
-rm .gospel
-```
-
-## Copying Output
-
-The program output can be easily copied to the clipboard using piping:
-
-**macOS:**
-```bash
-./gospel | pbcopy
-```
-
-**Linux:**
-```bash
-./gospel | xclip -selection clipboard
-# or
-./gospel | xsel -b
-```
-
-**Windows:**
-```bat
-gospel | clip
-```
-
-This is useful for sharing gospel presentations or copying the content for use in documents, emails, or other applications.
-
-## Bible Translations
-
-- **KJV**: King James Version — `BibleKJV.txt` (downloaded from https://openbible.com/textfiles/kjv.txt)
-- **BSB**: Berean Standard Bible — `BibleBSB.txt` (downloaded from https://bereanbible.com/bsb.txt)
-- **WEB**: World English Bible — `BibleWEB.txt` (downloaded from https://openbible.com/textfiles/web.txt)
-
-If a Bible translation file is not found, the program will prompt you to download it automatically using `curl`.
-
-## Files
-
-- `gospel.cpp` - Main program source code
-- `.gospel` - Optional config file for persistent defaults (created by `--saveconfig`)
-- `BibleKJV.txt` - KJV Bible text (downloaded on first use)
-- `BibleBSB.txt` - BSB Bible text (downloaded on first use)
-- `BibleWEB.txt` - WEB Bible text (downloaded on first use)
-
-## Requirements
-
-- C++11 or later
-- Standard C++ library
-- `curl` (for automatic Bible file download — built into Windows 10+)
-- `pandoc` (for PDF and EPUB output):
-  - macOS/Linux/Windows: see [pandoc.org](https://pandoc.org/installing.html)
-- A LaTeX engine (for PDF output only):
-  - macOS: `basictex` via Homebrew
-  - Linux: `texlive` via apt
-  - Windows: `MiKTeX` via winget
-- `xelatex` / `xetex` (for custom PDF fonts via `--pdffont=`)
-- `qrencode` (optional, for QR code in EPUB from `gospel_epub_add.txt`):
-  - macOS: `brew install qrencode`
-  - Linux: `apt install qrencode`
