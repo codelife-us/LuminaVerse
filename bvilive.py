@@ -83,6 +83,8 @@ THEME_KEYS = [
     ("quotes",           "quotes_var",            "bool", "no"),
     ("textshadow",       "textshadow_var",        "str",  "0"),
     ("shadowmethod",     "shadowmethod_var",      "str",  "1"),
+    ("textoutline",      "textoutline_var",       "str",  "0"),
+    ("textoutlinecolor", "textoutlinecolor_var",  "str",  "black"),
     ("linespacing",      "linespacing_var",       "str",  "0"),
     ("textpanelrounded", "panelrounded_var",      "bool", "no"),
     ("citebibleversion", "citebibleversion_var",  "bool", "yes"),
@@ -298,6 +300,8 @@ class BviView:
         _ts = _cfg("textshadow", "0")
         self.textshadow_var    = tk.StringVar(value="5" if _ts == "yes" else "0" if _ts == "no" else _ts)
         self.shadowmethod_var  = tk.StringVar(value=_cfg("shadowmethod", "1"))
+        self.textoutline_var      = tk.StringVar(value=_cfg("textoutline", "0"))
+        self.textoutlinecolor_var = tk.StringVar(value=_cfg("textoutlinecolor", "black"))
         self.linespacing_var   = tk.StringVar(value=_cfg("linespacing", "0"))
         self.textpanel_var     = tk.StringVar(value=_cfg("textpanel", ""))
         self.textpanelcolor_var = tk.StringVar(value=_cfg("textpanelcolor", "black"))
@@ -479,26 +483,32 @@ class BviView:
             tk.Radiobutton(sm_frame, text=label, variable=self.shadowmethod_var, value=val,
                            command=lambda: self._schedule(0)).pack(side="left")
 
+        # Text outline
+        tk.Label(f, text="Text outline px:").grid(row=20, column=0, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.textoutline_var, width=3).grid(row=20, column=1, sticky="w", **pad)
+        self.textoutline_var.trace_add("write", lambda *_: self._schedule(400))
+        self._make_color_row(f, "Outline color:", self.textoutlinecolor_var, 20, col_start=2)
+
         # Text panel opacity + rounded, line spacing
-        tk.Label(f, text="Text panel %:").grid(row=20, column=0, sticky="e", **pad)
+        tk.Label(f, text="Text panel %:").grid(row=21, column=0, sticky="e", **pad)
         tp_frame = tk.Frame(f)
-        tp_frame.grid(row=20, column=1, sticky="w", **pad)
+        tp_frame.grid(row=21, column=1, sticky="w", **pad)
         tk.Entry(tp_frame, textvariable=self.textpanel_var, width=5).pack(side="left")
         tk.Checkbutton(tp_frame, text="Rounded", variable=self.panelrounded_var,
                        command=lambda: self._schedule(0)).pack(side="left", padx=(4, 0))
         self.textpanel_var.trace_add("write", lambda *_: self._schedule(400))
-        tk.Label(f, text="Line spacing:").grid(row=20, column=2, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.linespacing_var, width=5).grid(row=20, column=3, sticky="w", **pad)
+        tk.Label(f, text="Line spacing:").grid(row=21, column=2, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.linespacing_var, width=5).grid(row=21, column=3, sticky="w", **pad)
         self.linespacing_var.trace_add("write", lambda *_: self._schedule(400))
 
         # Themes
         self.theme_var = tk.StringVar()
-        tk.Label(f, text="Theme:").grid(row=21, column=0, sticky="e", **pad)
+        tk.Label(f, text="Theme:").grid(row=22, column=0, sticky="e", **pad)
         self.theme_cb = ttk.Combobox(f, textvariable=self.theme_var, state="readonly", width=18)
-        self.theme_cb.grid(row=21, column=1, sticky="ew", **pad)
+        self.theme_cb.grid(row=22, column=1, sticky="ew", **pad)
         self.theme_cb.bind("<<ComboboxSelected>>", lambda _: self._on_theme_select())
         tbf = tk.Frame(f)
-        tbf.grid(row=21, column=2, columnspan=2, sticky="w", padx=(4, 6), pady=3)
+        tbf.grid(row=22, column=2, columnspan=2, sticky="w", padx=(4, 6), pady=3)
         tk.Button(tbf, text="Save…",   padx=3, command=self._save_theme_dialog).pack(side="left", padx=(0, 3))
         tk.Button(tbf, text="Delete",  padx=3, command=self._delete_theme).pack(side="left", padx=(0, 3))
         tk.Button(tbf, text="Default", padx=3, command=self._make_default_theme).pack(side="left")
@@ -506,23 +516,23 @@ class BviView:
 
         # Preview size / Copy bvi / Save image
         tk.Checkbutton(f, text="Preview at half size", variable=self.half_size_var,
-                       command=self._on_half_size_toggle).grid(row=22, column=0, columnspan=2, sticky="w", **pad)
-        tk.Button(f, text="Copy bvi", command=self._copy_bvi_cmd).grid(row=22, column=2, sticky="e", pady=3)
-        tk.Button(f, text="Save Image…", command=self._save_image).grid(row=22, column=3, sticky="e", padx=(0, 8), pady=3)
+                       command=self._on_half_size_toggle).grid(row=23, column=0, columnspan=2, sticky="w", **pad)
+        tk.Button(f, text="Copy bvi", command=self._copy_bvi_cmd).grid(row=23, column=2, sticky="e", pady=3)
+        tk.Button(f, text="Save Image…", command=self._save_image).grid(row=23, column=3, sticky="e", padx=(0, 8), pady=3)
 
         # Status
         tk.Label(f, textvariable=self.status_var, fg="gray45",
-                 anchor="w", width=46).grid(row=23, column=0, columnspan=4, **pad)
+                 anchor="w", width=46).grid(row=24, column=0, columnspan=4, **pad)
 
-    def _make_color_row(self, parent, label: str, var: tk.StringVar, row: int):
+    def _make_color_row(self, parent, label: str, var: tk.StringVar, row: int, col_start: int = 0):
         pad = dict(padx=6, pady=3)
-        tk.Label(parent, text=label).grid(row=row, column=0, sticky="e", **pad)
+        tk.Label(parent, text=label).grid(row=row, column=col_start, sticky="e", **pad)
 
-        entry = tk.Entry(parent, textvariable=var, width=22)
-        entry.grid(row=row, column=1, columnspan=2, sticky="ew", **pad)
+        entry = tk.Entry(parent, textvariable=var, width=22 if col_start == 0 else 10)
+        entry.grid(row=row, column=col_start + 1, columnspan=(2 if col_start == 0 else 1), sticky="ew", **pad)
 
         cf = tk.Frame(parent)
-        cf.grid(row=row, column=3, padx=(0, 6), pady=3, sticky="w")
+        cf.grid(row=row, column=col_start + (3 if col_start == 0 else 2), padx=(0, 6), pady=3, sticky="w")
         swatch = tk.Label(cf, width=2, relief="solid", cursor="hand2")
         swatch.pack(side="left", padx=(0, 2))
         tk.Button(cf, text="…", padx=2,
@@ -1038,6 +1048,14 @@ class BviView:
         else:
             cmd.append("--no-textshadow")
         cmd.append(f"--shadowmethod={self.shadowmethod_var.get()}")
+        tol = self.textoutline_var.get().strip()
+        if re.fullmatch(r'\d+', tol) and int(tol) > 0:
+            cmd.append(f"--textoutline={tol}")
+            toc = self.textoutlinecolor_var.get().strip()
+            if toc and toc != "black":
+                cmd.append(f"--textoutlinecolor={toc}")
+        else:
+            cmd.append("--no-textoutline")
         tp = self.textpanel_var.get().strip()
         if re.fullmatch(r'\d+', tp):
             cmd.append(f"--textpanel={tp}")

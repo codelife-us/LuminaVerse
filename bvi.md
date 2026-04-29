@@ -26,6 +26,7 @@ A C++ program that renders a Bible verse reference (or custom text) to a JPEG im
 - Verse text size: force an absolute point size (`--textsize`), cap auto-fit at a maximum (`--maxtextsize`), or scale relative to auto-fit (`--textscale`)
 - Semi-transparent panel behind verse text for readability (`--textpanel`)
 - Drop shadow behind verse text with adjustable intensity (`--textshadow[=N]`)
+- Outline around verse text for stronger emphasis (`--textoutline[=N]`, `--textoutlinecolor`)
 - Shadow style: soft Gaussian blur or hard offset copy (`--shadowmethod`)
 - Adjustable line spacing (`--linespacing`)
 - Custom font support
@@ -208,6 +209,25 @@ Control the rendering style for both text and citation shadows with `--shadowmet
 ```
 
 The shadow method affects both `--textshadow` and `--citeshadow` together.
+
+### Text Outline
+
+Add a solid outline around verse text characters for stronger emphasis than a drop shadow. The outline is rendered cleanly outside the glyphs using morphological dilation, so the fill color is never obscured.
+
+```bash
+./bvi "John 3:16" --textoutline            # 2px black outline (default width/color)
+./bvi "John 3:16" --textoutline=3          # 3px outline
+./bvi "John 3:16" --textoutline=4 --textoutlinecolor=navy
+./bvi "John 3:16" --no-textoutline         # off (default)
+```
+
+| Option | Description |
+|---|---|
+| `--textoutline[=N]` | Outline width in pixels (default 2 when flag used without value) |
+| `--no-textoutline` | Disable outline (default) |
+| `--textoutlinecolor=C` | Outline color, any ImageMagick color (default: black) |
+
+When combined with `--textshadow`, the outline is applied first so the shadow is cast from the outlined shape, which looks natural. Outline width of 2–4px suits most large text; higher values produce bolder borders.
 
 ### Line Spacing
 

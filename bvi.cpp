@@ -303,13 +303,16 @@ void printHelp() {
     cout << "  --textshadow[=N]        Add drop shadow behind verse text; N=1-10 intensity (default 5)\n";
     cout << "  --no-textshadow         Remove drop shadow (default)\n";
     cout << "  --shadowmethod=N        Shadow style: 1=soft Gaussian blur (default), 2=hard offset copy\n";
+    cout << "  --textoutline[=N]       Outline width in pixels around verse text (default 2); stronger emphasis than shadow\n";
+    cout << "  --no-textoutline        Remove outline (default)\n";
+    cout << "  --textoutlinecolor=C    Outline color (default: black); any ImageMagick color\n";
     cout << "  --linespacing=N         Adjust line spacing: positive=more, negative=less, 0=default\n";
     cout << "  --textoffy=N            Shift verse text vertically; positive=down, negative=up (default 0)\n";
     cout << "  --citeoffy=N            Shift citation vertically; positive=toward bottom edge, negative=away (default 0)\n\n";
     cout << "Config file (.luminaverse in current directory or $HOME, [bvi] section):\n";
     cout << "  --saveconfig            Save current settings to .luminaverse [bvi] as new defaults\n";
     cout << "  --showconfig            Print current effective settings and exit\n\n";
-    cout << "  Supported keys in [bvi]:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  citefont  quotes  citesize  citescale  citestyle  citeplacement  citebibleversion  citeshadow  citealign  citepanel  textsize  maxtextsize  textscale  textpanel  textpanelcolor  textpanelrounded  textshadow  shadowmethod  linespacing  textoffy  citeoffy\n\n";
+    cout << "  Supported keys in [bvi]:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  citefont  quotes  citesize  citescale  citestyle  citeplacement  citebibleversion  citeshadow  citealign  citepanel  textsize  maxtextsize  textscale  textpanel  textpanelcolor  textpanelrounded  textshadow  shadowmethod  textoutline  textoutlinecolor  linespacing  textoffy  citeoffy\n\n";
     cout << "Requires:\n";
     cout << "  ImageMagick  —  brew install imagemagick\n\n";
     cout << "Examples:\n";
@@ -414,6 +417,8 @@ int main(int argc, char* argv[]) {
     string textPanelColor = cfgGet(cfg, "textpanelcolor",   "black");
     int textShadow       = parseShadow(cfgGet(cfg, "textshadow", "no"));
     int shadowMethod     = max(1, min(2, stoi(cfgGet(cfg, "shadowmethod", "1"))));
+    int textOutline      = max(0, stoi(cfgGet(cfg, "textoutline",      "0")));   // 0 = off
+    string textOutlineColor = cfgGet(cfg, "textoutlinecolor", "black");
     bool panelRounded    = cfgGet(cfg, "textpanelrounded",  "no") == "yes";
     int lineSpacing      = stoi(cfgGet(cfg, "linespacing",    "0"));         // 0 = default; positive=more, negative=less
     int textOffsetY      = stoi(cfgGet(cfg, "textoffy",      "0"));         // 0 = default; positive=down, negative=up
@@ -498,6 +503,14 @@ int main(int argc, char* argv[]) {
             textShadow = 0;
         } else if (arg.find("--shadowmethod=") == 0) {
             shadowMethod = max(1, min(2, stoi(arg.substr(15))));
+        } else if (arg.find("--textoutline=") == 0) {
+            textOutline = max(0, stoi(arg.substr(14)));
+        } else if (arg == "--textoutline") {
+            textOutline = 2;
+        } else if (arg == "--no-textoutline") {
+            textOutline = 0;
+        } else if (arg.find("--textoutlinecolor=") == 0) {
+            textOutlineColor = arg.substr(19);
         } else if (arg.find("--linespacing=") == 0) {
             lineSpacing = stoi(arg.substr(14));
         } else if (arg.find("--textoffy=") == 0) {
@@ -586,6 +599,8 @@ int main(int argc, char* argv[]) {
         cout << "  textpanelrounded = " << (panelRounded ? "yes" : "no") << "\n";
         cout << "  textshadow       = " << (textShadow > 0 ? to_string(textShadow) : "no") << "\n";
         cout << "  shadowmethod     = " << shadowMethod << "\n";
+        cout << "  textoutline      = " << (textOutline > 0 ? to_string(textOutline) : "no") << "\n";
+        cout << "  textoutlinecolor = " << textOutlineColor << "\n";
         cout << "  linespacing      = " << lineSpacing << "\n";
         cout << "  textoffy         = " << textOffsetY << "\n";
         cout << "  citeoffy         = " << citeOffsetY << "\n";
@@ -634,6 +649,8 @@ int main(int argc, char* argv[]) {
             "textpanelrounded = " + string(panelRounded ? "yes" : "no"),
             "textshadow       = " + (textShadow > 0 ? to_string(textShadow) : string("no")),
             "shadowmethod     = " + to_string(shadowMethod),
+            "textoutline      = " + (textOutline > 0 ? to_string(textOutline) : string("0")),
+            "textoutlinecolor = " + textOutlineColor,
             "linespacing      = " + to_string(lineSpacing),
             "textoffy         = " + to_string(textOffsetY),
             "citeoffy         = " + to_string(citeOffsetY)
@@ -790,7 +807,7 @@ int main(int argc, char* argv[]) {
 
     // When using a photo background or text shadow the verse layer needs a
     // transparent background so it composites cleanly.
-    string layerBg = (bgPhoto.empty() && textShadow == 0) ? bgColor : "none";
+    string layerBg = (bgPhoto.empty() && textShadow == 0 && textOutline == 0) ? bgColor : "none";
 
     // Determine whether and at what size to pass -pointsize to caption:.
     // caption: with -pointsize uses a fixed/max size rather than auto-filling,
@@ -851,15 +868,29 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // ── Optional shadow step ──────────────────────────────────────────────
+    // ── Optional outline step (before shadow so shadow uses outlined shape) ─
+    string tmpOutline = outputFile + ".tmp_outline.png";
     string tmpShadow  = outputFile + ".tmp_shadow.png";
     string activeLayer = tmpLayer;
+    if (textOutline > 0) {
+        ostringstream outlineCmd;
+        outlineCmd << im << " \"" << activeLayer << "\""
+                   << " " << LP << " +clone -channel alpha"
+                   << " -morphology Dilate disk:" << textOutline
+                   << " +channel -fill \"" << textOutlineColor << "\" -colorize 100 " << RP
+                   << " +swap -composite"
+                   << " \"" << tmpOutline << "\"";
+        if (runSystem(outlineCmd.str()) == 0)
+            activeLayer = tmpOutline;
+    }
+
+    // ── Optional shadow step ──────────────────────────────────────────────
     if (textShadow > 0) {
         double sigma   = (shadowMethod == 1) ? textShadow * 0.8 : 0.0;
         int    offset  = max(1, (int)round(textShadow * 0.6));
         int    opacity = (shadowMethod == 1) ? 80 : 100;
         ostringstream shadowCmd;
-        shadowCmd << im << " \"" << tmpLayer << "\""
+        shadowCmd << im << " \"" << activeLayer << "\""
                   << " " << LP << " +clone -background black -shadow " << opacity << "x" << sigma
                   << "+" << offset << "+" << offset << " " << RP
                   << " +swap -background none -flatten"
@@ -1088,6 +1119,7 @@ int main(int argc, char* argv[]) {
     int ret2 = runSystem(cmd2.str());
 
     remove(tmpLayer.c_str());
+    if (textOutline > 0) remove(tmpOutline.c_str());
     if (textShadow > 0) remove(tmpShadow.c_str());
 
     if (ret2 != 0) {
