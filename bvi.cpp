@@ -308,11 +308,12 @@ void printHelp() {
     cout << "  --textoutlinecolor=C    Outline color (default: black); any ImageMagick color\n";
     cout << "  --linespacing=N         Adjust line spacing: positive=more, negative=less, 0=default\n";
     cout << "  --textoffy=N            Shift verse text vertically; positive=down, negative=up (default 0)\n";
-    cout << "  --citeoffy=N            Shift citation vertically; positive=toward bottom edge, negative=away (default 0)\n\n";
+    cout << "  --citeoffy=N            Shift citation vertically; positive=toward bottom edge, negative=away (default 0)\n";
+    cout << "  --reserve=SIDE,PCT      Reserve PCT% on SIDE (top/right/bottom/left); repeat for multiple sides\n\n";
     cout << "Config file (.luminaverse in current directory or $HOME, [bvi] section):\n";
     cout << "  --saveconfig            Save current settings to .luminaverse [bvi] as new defaults\n";
     cout << "  --showconfig            Print current effective settings and exit\n\n";
-    cout << "  Supported keys in [bvi]:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  citefont  quotes  citesize  citescale  citestyle  citeplacement  citebibleversion  citeshadow  citealign  citepanel  textsize  maxtextsize  textscale  textpanel  textpanelcolor  textpanelrounded  textshadow  shadowmethod  textoutline  textoutlinecolor  linespacing  textoffy  citeoffy\n\n";
+    cout << "  Supported keys in [bvi]:  bv  width  height  font  bg  bgphoto  dim  textcolor  citecolor  citefont  quotes  citesize  citescale  citestyle  citeplacement  citebibleversion  citeshadow  citealign  citepanel  textsize  maxtextsize  textscale  textpanel  textpanelcolor  textpanelrounded  textshadow  shadowmethod  textoutline  textoutlinecolor  linespacing  textoffy  citeoffy  reservetop  reserveright  reservebottom  reserveleft\n\n";
     cout << "Requires:\n";
     cout << "  ImageMagick  —  brew install imagemagick\n\n";
     cout << "Examples:\n";
@@ -423,6 +424,10 @@ int main(int argc, char* argv[]) {
     int lineSpacing      = stoi(cfgGet(cfg, "linespacing",    "0"));         // 0 = default; positive=more, negative=less
     int textOffsetY      = stoi(cfgGet(cfg, "textoffy",      "0"));         // 0 = default; positive=down, negative=up
     int citeOffsetY      = stoi(cfgGet(cfg, "citeoffy",      "0"));         // 0 = default; positive=toward bottom, negative=away
+    int reserveTop       = stoi(cfgGet(cfg, "reservetop",    "0"));
+    int reserveRight     = stoi(cfgGet(cfg, "reserveright",  "0"));
+    int reserveBottom    = stoi(cfgGet(cfg, "reservebottom", "0"));
+    int reserveLeft      = stoi(cfgGet(cfg, "reserveleft",   "0"));
 
     bool saveConfig  = false;
     bool showConfig  = false;
@@ -517,6 +522,18 @@ int main(int argc, char* argv[]) {
             textOffsetY = stoi(arg.substr(11));
         } else if (arg.find("--citeoffy=") == 0) {
             citeOffsetY = stoi(arg.substr(11));
+        } else if (arg.find("--reserve=") == 0) {
+            string val = arg.substr(10);
+            size_t comma = val.find(',');
+            if (comma != string::npos) {
+                string side = val.substr(0, comma);
+                int pct = max(0, min(90, stoi(val.substr(comma + 1))));
+                if      (side == "top")    reserveTop    = pct;
+                else if (side == "right")  reserveRight  = pct;
+                else if (side == "bottom") reserveBottom = pct;
+                else if (side == "left")   reserveLeft   = pct;
+                else { cerr << "Error: --reserve= side must be top, right, bottom, or left.\n"; return 1; }
+            }
         } else if (arg == "--textpanelrounded") {
             panelRounded = true;
         } else if (arg == "--no-textpanelrounded") {
@@ -604,6 +621,10 @@ int main(int argc, char* argv[]) {
         cout << "  linespacing      = " << lineSpacing << "\n";
         cout << "  textoffy         = " << textOffsetY << "\n";
         cout << "  citeoffy         = " << citeOffsetY << "\n";
+        cout << "  reservetop       = " << reserveTop    << "\n";
+        cout << "  reserveright     = " << reserveRight  << "\n";
+        cout << "  reservebottom    = " << reserveBottom << "\n";
+        cout << "  reserveleft      = " << reserveLeft   << "\n";
         ifstream check(CONFIG_FILE);
         if (check.good())
             cout << "\nConfig file: ./" << CONFIG_FILE << " (loaded)\n";
@@ -653,7 +674,11 @@ int main(int argc, char* argv[]) {
             "textoutlinecolor = " + textOutlineColor,
             "linespacing      = " + to_string(lineSpacing),
             "textoffy         = " + to_string(textOffsetY),
-            "citeoffy         = " + to_string(citeOffsetY)
+            "citeoffy         = " + to_string(citeOffsetY),
+            "reservetop       = " + to_string(reserveTop),
+            "reserveright     = " + to_string(reserveRight),
+            "reservebottom    = " + to_string(reserveBottom),
+            "reserveleft      = " + to_string(reserveLeft)
         };
         if (!writeSection(lines)) { cerr << "Error: could not write '" << CONFIG_FILE << "'.\n"; return 1; }
         cerr << "Saved [" << SECTION << "] to ./" << CONFIG_FILE << "\n";
@@ -771,6 +796,19 @@ int main(int argc, char* argv[]) {
     int citePt    = (citeSizeOvr > 0) ? citeSizeOvr : max(1, (int)(60 * scale * citeScalePct / 100.0)); // ~60pt at 1080p
     int citeOffY  = max(0, max(20, (int)(55 * scale)) - citeOffsetY); // pixels inward from bottom edge
     verseOffY    -= textOffsetY;   // positive textOffsetY moves verse down
+
+    // Reserve: shrink canvas into remaining area and shift center.
+    double fracTop    = reserveTop    / 100.0;
+    double fracRight  = reserveRight  / 100.0;
+    double fracBottom = reserveBottom / 100.0;
+    double fracLeft   = reserveLeft   / 100.0;
+    int reserveShiftX = (int)(imgWidth  * (fracLeft - fracRight) / 2.0);
+    int reserveShiftY = (int)(imgHeight * (fracTop  - fracBottom) / 2.0);
+    verseW = max(1, (int)(verseW * (1.0 - fracLeft - fracRight)));
+    verseH = max(1, (int)(verseH * (1.0 - fracTop  - fracBottom)));
+    verseOffY -= reserveShiftY;  // bvi verseOffY is above-center; top reserve shifts center down → decrease
+    string rGeomX = (reserveShiftX >= 0 ? "+" : "") + to_string(reserveShiftX);
+
     int citeMarginX = (imgWidth - (int)(imgWidth * 0.896)) / 2; // matches verse left/right margin
 
     // Gravity strings based on citealign (center/left/right) and placement (below/bottom).
@@ -951,7 +989,7 @@ int main(int argc, char* argv[]) {
                       << (textPanelOpacity / 100.0) << " +channel " << RP;
         }
         panelDraw << " -gravity Center"
-                  << (panelOffY >= 0 ? " -geometry +0-" : " -geometry +0+") << abs(panelOffY)
+                  << " -geometry " << rGeomX << (panelOffY >= 0 ? "-" : "+") << abs(panelOffY)
                   << " -composite";
 
         // Independent mode: separate narrow panel behind the bottom citation.
@@ -1094,7 +1132,7 @@ int main(int argc, char* argv[]) {
              << panelDraw.str()
              << " \"" << activeLayer << "\""
              << " -gravity Center"
-             << " -geometry +0" << (verseOffY >= 0 ? "-" : "+") << abs(verseOffY)
+             << " -geometry " << rGeomX << (verseOffY >= 0 ? "-" : "+") << abs(verseOffY)
              << " -composite"
              << citeAnnot.str()
              << " \"" << outputFile << "\"";
@@ -1110,7 +1148,7 @@ int main(int argc, char* argv[]) {
              << panelDraw.str()
              << " \"" << activeLayer << "\""
              << " -gravity Center"
-             << " -geometry +0" << (verseOffY >= 0 ? "-" : "+") << abs(verseOffY)
+             << " -geometry " << rGeomX << (verseOffY >= 0 ? "-" : "+") << abs(verseOffY)
              << " -composite"
              << citeAnnot.str()
              << " \"" << outputFile << "\"";

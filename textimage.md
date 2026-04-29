@@ -16,6 +16,7 @@ A C++ program that renders plain text to a JPEG image with auto-fitted text. The
 - Outline around text for stronger emphasis (`--textoutline[=N]`, `--textoutlinecolor`)
 - Shadow style: soft Gaussian blur or hard offset copy (`--shadowmethod`)
 - Adjustable line spacing (`--linespacing`)
+- Reserve a portion of the image from any side, centering text in the remaining space (`--reserve`)
 - Custom font support
 - Config file (`.luminaverse` `[textimage]` section) stores per-folder defaults
 - Default output filename derived from the first few words of the text
@@ -192,6 +193,31 @@ Fine-tune the vertical position of the text block with `--textoffy`. Positive mo
 
 Defaults to `0` (no adjustment).
 
+## Reserve
+
+Keep a portion of the image empty on one or more sides and center the text in the remaining space. Useful for placing text alongside a photo subject, a logo, or another UI element.
+
+Use `--reserve=SIDE,PCT` once per side. Each side independently shrinks the text canvas and shifts the center into the remaining region. Multiple sides compose correctly.
+
+```bash
+./textimage "He is risen." --reserve=top,30                          # reserve 30% at top; text in bottom 70%
+./textimage "He is risen." --reserve=right,40                        # reserve 40% at right; text in left 60%
+./textimage "He is risen." --reserve=left,30 --reserve=top,20        # reserve left 30% and top 20%; text in remaining bottom-right area
+./textimage "He is risen." --reserve=left,25 --reserve=right,25      # center column; equal margins
+```
+
+SIDE is `top`, `right`, `bottom`, or `left`; PCT is 0–90.
+
+| Option | Description |
+|---|---|
+| `--reserve=SIDE,PCT` | Reserve PCT% from SIDE; repeat for multiple sides |
+
+Reserve can be combined with `--textoffy` for fine-tuning within the remaining area:
+
+```bash
+./textimage "He is risen." --reserve=top,30 --reserve=left,20 --textoffy=10
+```
+
 ## Text Size
 
 By default the text auto-fits to the largest size that fills the canvas. Use one of these options to control the size — `--textsize`/`--maxtextsize` and `--textscale` cannot be combined.
@@ -267,9 +293,13 @@ textoutline      = 0
 textoutlinecolor = black
 linespacing      = 0
 textoffy         = 0
+reservetop       = 20
+reserveright     = 0
+reservebottom    = 0
+reserveleft      = 30
 ```
 
-Supported keys: `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `textsize`, `maxtextsize`, `textscale`, `textpanel`, `textpanelcolor`, `textpanelrounded`, `textshadow`, `shadowmethod`, `textoutline`, `textoutlinecolor`, `linespacing`, `textoffy`
+Supported keys: `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `textsize`, `maxtextsize`, `textscale`, `textpanel`, `textpanelcolor`, `textpanelrounded`, `textshadow`, `shadowmethod`, `textoutline`, `textoutlinecolor`, `linespacing`, `textoffy`, `reservetop`, `reserveright`, `reservebottom`, `reserveleft`
 
 ## Files
 

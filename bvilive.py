@@ -86,6 +86,10 @@ THEME_KEYS = [
     ("textoutline",      "textoutline_var",       "str",  "0"),
     ("textoutlinecolor", "textoutlinecolor_var",  "str",  "black"),
     ("linespacing",      "linespacing_var",       "str",  "0"),
+    ("reservetop",       "reserve_top_var",       "str",  "0"),
+    ("reserveright",     "reserve_right_var",     "str",  "0"),
+    ("reservebottom",    "reserve_bottom_var",    "str",  "0"),
+    ("reserveleft",      "reserve_left_var",      "str",  "0"),
     ("textpanelrounded", "panelrounded_var",      "bool", "no"),
     ("citebibleversion", "citebibleversion_var",  "bool", "yes"),
     ("customtext",         "customtext_var",       "str",  ""),
@@ -245,6 +249,7 @@ class BviView:
         self._render_lock  = threading.Lock()
         self._photo        = None     # keep ImageTk ref alive
         self._last_ref     = ""
+        self._live_active  = True
 
         cfg = load_bvi_config()
 
@@ -303,6 +308,10 @@ class BviView:
         self.textoutline_var      = tk.StringVar(value=_cfg("textoutline", "0"))
         self.textoutlinecolor_var = tk.StringVar(value=_cfg("textoutlinecolor", "black"))
         self.linespacing_var   = tk.StringVar(value=_cfg("linespacing", "0"))
+        self.reserve_top_var    = tk.StringVar(value=_cfg("reservetop",    "0"))
+        self.reserve_right_var  = tk.StringVar(value=_cfg("reserveright",  "0"))
+        self.reserve_bottom_var = tk.StringVar(value=_cfg("reservebottom", "0"))
+        self.reserve_left_var   = tk.StringVar(value=_cfg("reserveleft",   "0"))
         self.textpanel_var     = tk.StringVar(value=_cfg("textpanel", ""))
         self.textpanelcolor_var = tk.StringVar(value=_cfg("textpanelcolor", "black"))
         self.panelrounded_var  = tk.BooleanVar(value=_cfg("textpanelrounded", "no") == "yes")
@@ -467,21 +476,29 @@ class BviView:
         tk.Button(f, text="…", padx=2,
                   command=self._browse_bgphoto).grid(row=17, column=3, sticky="w", padx=(0, 6), pady=3)
 
-        # Dim / Text shadow
+        # Dim / Text shadow + shadow method (merged row)
         tk.Label(f, text="Dim %:").grid(row=18, column=0, sticky="e", **pad)
         tk.Entry(f, textvariable=self.dim_var, width=5).grid(row=18, column=1, sticky="w", **pad)
         self.dim_var.trace_add("write", lambda *_: self._schedule(400))
-        tk.Label(f, text="Text shadow (0-10):").grid(row=18, column=2, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.textshadow_var, width=3).grid(row=18, column=3, sticky="w", **pad)
+        _shd_frame = tk.Frame(f)
+        _shd_frame.grid(row=18, column=2, columnspan=2, sticky="w", padx=6, pady=3)
+        tk.Label(_shd_frame, text="Shadow (0-10):").pack(side="left")
+        tk.Entry(_shd_frame, textvariable=self.textshadow_var, width=3).pack(side="left", padx=(2, 6))
         self.textshadow_var.trace_add("write", lambda *_: self._schedule(400))
+        _SM_OPTS = ["1 – Soft (Gaussian)", "2 – Hard (copy)"]
+        self._sm_cb = ttk.Combobox(_shd_frame, values=_SM_OPTS, state="readonly", width=17)
+        self._sm_cb.pack(side="left")
 
-        # Shadow method
-        tk.Label(f, text="Shadow method:").grid(row=19, column=0, sticky="e", **pad)
-        sm_frame = tk.Frame(f)
-        sm_frame.grid(row=19, column=1, columnspan=3, sticky="w")
-        for val, label in (("1", "1 – Soft (Gaussian)"), ("2", "2 – Hard (copy)")):
-            tk.Radiobutton(sm_frame, text=label, variable=self.shadowmethod_var, value=val,
-                           command=lambda: self._schedule(0)).pack(side="left")
+        def _sync_sm_cb(*_):
+            v = self.shadowmethod_var.get()
+            idx = 0 if v == "1" else 1
+            self._sm_cb.current(idx)
+
+        self.shadowmethod_var.trace_add("write", _sync_sm_cb)
+        _sync_sm_cb()
+        self._sm_cb.bind("<<ComboboxSelected>>",
+                         lambda _: (self.shadowmethod_var.set(self._sm_cb.get()[0]),
+                                    self._schedule(0)))
 
         # Text outline
         tk.Label(f, text="Text outline px:").grid(row=20, column=0, sticky="e", **pad)
@@ -501,28 +518,42 @@ class BviView:
         tk.Entry(f, textvariable=self.linespacing_var, width=5).grid(row=21, column=3, sticky="w", **pad)
         self.linespacing_var.trace_add("write", lambda *_: self._schedule(400))
 
+        # Reserve %
+        tk.Label(f, text="Reserve %:").grid(row=22, column=0, sticky="e", **pad)
+        res_frame = tk.Frame(f)
+        res_frame.grid(row=22, column=1, columnspan=3, sticky="w", padx=6, pady=3)
+        for _lbl, _var in (("T", self.reserve_top_var), ("R", self.reserve_right_var),
+                           ("B", self.reserve_bottom_var), ("L", self.reserve_left_var)):
+            tk.Label(res_frame, text=f"{_lbl}:").pack(side="left")
+            tk.Entry(res_frame, textvariable=_var, width=4).pack(side="left", padx=(0, 8))
+            _var.trace_add("write", lambda *_: self._schedule(400))
+
         # Themes
         self.theme_var = tk.StringVar()
-        tk.Label(f, text="Theme:").grid(row=22, column=0, sticky="e", **pad)
+        tk.Label(f, text="Theme:").grid(row=23, column=0, sticky="e", **pad)
         self.theme_cb = ttk.Combobox(f, textvariable=self.theme_var, state="readonly", width=18)
-        self.theme_cb.grid(row=22, column=1, sticky="ew", **pad)
+        self.theme_cb.grid(row=23, column=1, sticky="ew", **pad)
         self.theme_cb.bind("<<ComboboxSelected>>", lambda _: self._on_theme_select())
         tbf = tk.Frame(f)
-        tbf.grid(row=22, column=2, columnspan=2, sticky="w", padx=(4, 6), pady=3)
+        tbf.grid(row=23, column=2, columnspan=2, sticky="w", padx=(4, 6), pady=3)
         tk.Button(tbf, text="Save…",   padx=3, command=self._save_theme_dialog).pack(side="left", padx=(0, 3))
         tk.Button(tbf, text="Delete",  padx=3, command=self._delete_theme).pack(side="left", padx=(0, 3))
         tk.Button(tbf, text="Default", padx=3, command=self._make_default_theme).pack(side="left")
         self._update_theme_dropdown()
 
-        # Preview size / Copy bvi / Save image
+        # Preview size / Play-Pause / Copy bvi / Save image
         tk.Checkbutton(f, text="Preview at half size", variable=self.half_size_var,
-                       command=self._on_half_size_toggle).grid(row=23, column=0, columnspan=2, sticky="w", **pad)
-        tk.Button(f, text="Copy bvi", command=self._copy_bvi_cmd).grid(row=23, column=2, sticky="e", pady=3)
-        tk.Button(f, text="Save Image…", command=self._save_image).grid(row=23, column=3, sticky="e", padx=(0, 8), pady=3)
+                       command=self._on_half_size_toggle).grid(row=24, column=0, columnspan=2, sticky="w", **pad)
+        bf = tk.Frame(f)
+        bf.grid(row=24, column=2, columnspan=2, sticky="e", padx=(0, 8), pady=3)
+        self.live_btn = tk.Button(bf, text="Pause", width=6, command=self._toggle_live)
+        self.live_btn.pack(side="left", padx=(0, 4))
+        tk.Button(bf, text="Copy bvi", command=self._copy_bvi_cmd).pack(side="left", padx=(0, 4))
+        tk.Button(bf, text="Save Image…", command=self._save_image).pack(side="left")
 
         # Status
         tk.Label(f, textvariable=self.status_var, fg="gray45",
-                 anchor="w", width=46).grid(row=24, column=0, columnspan=4, **pad)
+                 anchor="w", width=46).grid(row=25, column=0, columnspan=4, **pad)
 
     def _make_color_row(self, parent, label: str, var: tk.StringVar, row: int, col_start: int = 0):
         pad = dict(padx=6, pady=3)
@@ -959,6 +990,14 @@ class BviView:
         tscale = int(ts) if re.fullmatch(r"\d+", ts) else 100
         target_w = int(img_w * 0.896 * tscale / 100.0)
         target_h = int(img_h * 0.741 * tscale / 100.0)
+        for _side, _var in (("top", self.reserve_top_var), ("right", self.reserve_right_var),
+                            ("bottom", self.reserve_bottom_var), ("left", self.reserve_left_var)):
+            _pct = _var.get().strip()
+            if re.fullmatch(r'\d+', _pct) and int(_pct) > 0:
+                if _side in ("top", "bottom"):
+                    target_h = max(1, int(target_h * (1.0 - int(_pct) / 100.0)))
+                else:
+                    target_w = max(1, int(target_w * (1.0 - int(_pct) / 100.0)))
         ls = self.linespacing_var.get().strip()
         linespacing = int(ls) if re.fullmatch(r"-?\d+", ls) and ls != "0" else 0
         hi = min(target_w // 2, target_h)
@@ -995,7 +1034,15 @@ class BviView:
 
     # ── Rendering ─────────────────────────────────────────────────────────────
 
+    def _toggle_live(self):
+        self._live_active = not self._live_active
+        self.live_btn.config(text="Pause" if self._live_active else "Play")
+        if self._live_active:
+            self._schedule(0)
+
     def _schedule(self, delay_ms: int = 400):
+        if not self._live_active:
+            return
         if self._after_id is not None:
             self.root.after_cancel(self._after_id)
         self._after_id = self.root.after(delay_ms, self._render)
@@ -1091,6 +1138,11 @@ class BviView:
         ls = self.linespacing_var.get().strip()
         if re.fullmatch(r'-?\d+', ls) and ls != "0":
             cmd.append(f"--linespacing={ls}")
+        for _side, _var in (("top", self.reserve_top_var), ("right", self.reserve_right_var),
+                            ("bottom", self.reserve_bottom_var), ("left", self.reserve_left_var)):
+            _pct = _var.get().strip()
+            if re.fullmatch(r'\d+', _pct) and int(_pct) > 0:
+                cmd.append(f"--reserve={_side},{_pct}")
         cmd.append(f"--citebibleversion={'yes' if self.citebibleversion_var.get() else 'no'}")
         cmd.append(f"--citeplacement={self.citeplacement_var.get()}")
         cmd.append(f"--citealign={self.citealign_var.get()}")

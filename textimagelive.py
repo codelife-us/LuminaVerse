@@ -75,6 +75,10 @@ THEME_KEYS = [
     ("textoutlinecolor", "textoutlinecolor_var",  "str",  "black"),
     ("linespacing",      "linespacing_var",       "str",  "0"),
     ("textpanelrounded", "panelrounded_var",      "bool", "no"),
+    ("reservetop",       "reserve_top_var",       "str",  "0"),
+    ("reserveright",     "reserve_right_var",     "str",  "0"),
+    ("reservebottom",    "reserve_bottom_var",    "str",  "0"),
+    ("reserveleft",      "reserve_left_var",      "str",  "0"),
 ]
 
 
@@ -200,6 +204,7 @@ class TextImageView:
         self._render_gen  = 0
         self._proc        = None
         self._photo       = None
+        self._live_active = True
 
         cfg = load_textimage_config()
 
@@ -246,6 +251,10 @@ class TextImageView:
         self.textpanelcolor_var = tk.StringVar(value=_cfg("textpanelcolor",   "black"))
         self.panelrounded_var   = tk.BooleanVar(value=_cfg("textpanelrounded", "no") == "yes")
         self.linespacing_var    = tk.StringVar(value=_cfg("linespacing", "0"))
+        self.reserve_top_var    = tk.StringVar(value=_cfg("reservetop",    "0"))
+        self.reserve_right_var  = tk.StringVar(value=_cfg("reserveright",  "0"))
+        self.reserve_bottom_var = tk.StringVar(value=_cfg("reservebottom", "0"))
+        self.reserve_left_var   = tk.StringVar(value=_cfg("reserveleft",   "0"))
         half_size_saved         = self._live_state.get("half_size", "yes")
         self.half_size_var      = tk.BooleanVar(value=half_size_saved != "no")
         self.status_var         = tk.StringVar(value="Ready")
@@ -324,39 +333,61 @@ class TextImageView:
         tk.Button(f, text="…", padx=2,
                   command=self._browse_bgphoto).grid(row=8, column=3, sticky="w", padx=(0, 6), pady=3)
 
-        # Dim % / Text shadow
+        # Dim % / Text shadow / Shadow method
         tk.Label(f, text="Dim %:").grid(row=9, column=0, sticky="e", **pad)
         tk.Entry(f, textvariable=self.dim_var, width=5).grid(row=9, column=1, sticky="w", **pad)
         self.dim_var.trace_add("write", lambda *_: self._schedule(400))
-        tk.Label(f, text="Text shadow (0-10):").grid(row=9, column=2, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.textshadow_var, width=3).grid(row=9, column=3, sticky="w", **pad)
+        _shd_frame = tk.Frame(f)
+        _shd_frame.grid(row=9, column=2, columnspan=2, sticky="w", padx=6, pady=3)
+        tk.Label(_shd_frame, text="Shadow (0-10):").pack(side="left")
+        tk.Entry(_shd_frame, textvariable=self.textshadow_var, width=3).pack(side="left", padx=(2, 6))
         self.textshadow_var.trace_add("write", lambda *_: self._schedule(400))
-
-        # Shadow method
-        tk.Label(f, text="Shadow method:").grid(row=10, column=0, sticky="e", **pad)
-        sm_frame = tk.Frame(f)
-        sm_frame.grid(row=10, column=1, columnspan=3, sticky="w")
-        for val, label in (("1", "1 – Soft (Gaussian)"), ("2", "2 – Hard (copy)")):
-            tk.Radiobutton(sm_frame, text=label, variable=self.shadowmethod_var, value=val,
-                           command=lambda: self._schedule(0)).pack(side="left")
+        tk.Label(_shd_frame, text="Method:").pack(side="left")
+        _SM_OPTS = ["1 – Soft (Gaussian)", "2 – Hard (copy)"]
+        self._sm_cb = ttk.Combobox(_shd_frame, values=_SM_OPTS, state="readonly", width=17)
+        try:
+            self._sm_cb.current(int(self.shadowmethod_var.get()) - 1)
+        except (ValueError, IndexError):
+            self._sm_cb.current(0)
+        self._sm_cb.pack(side="left", padx=(2, 0))
+        def _on_sm_select(_e=None):
+            self.shadowmethod_var.set(str(self._sm_cb.current() + 1))
+            self._schedule(0)
+        self._sm_cb.bind("<<ComboboxSelected>>", _on_sm_select)
+        def _sync_sm_cb(*_):
+            try:
+                self._sm_cb.current(int(self.shadowmethod_var.get()) - 1)
+            except (ValueError, IndexError):
+                pass
+        self.shadowmethod_var.trace_add("write", _sync_sm_cb)
 
         # Text outline
-        tk.Label(f, text="Text outline px:").grid(row=11, column=0, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.textoutline_var, width=3).grid(row=11, column=1, sticky="w", **pad)
+        tk.Label(f, text="Text outline px:").grid(row=10, column=0, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.textoutline_var, width=3).grid(row=10, column=1, sticky="w", **pad)
         self.textoutline_var.trace_add("write", lambda *_: self._schedule(400))
-        self._make_color_row(f, "Outline color:", self.textoutlinecolor_var, 11, col_start=2)
+        self._make_color_row(f, "Outline color:", self.textoutlinecolor_var, 10, col_start=2)
 
         # Text panel opacity + rounded / Line spacing
-        tk.Label(f, text="Text panel %:").grid(row=12, column=0, sticky="e", **pad)
+        tk.Label(f, text="Text panel %:").grid(row=11, column=0, sticky="e", **pad)
         tp_frame = tk.Frame(f)
-        tp_frame.grid(row=12, column=1, sticky="w", **pad)
+        tp_frame.grid(row=11, column=1, sticky="w", **pad)
         tk.Entry(tp_frame, textvariable=self.textpanel_var, width=5).pack(side="left")
         tk.Checkbutton(tp_frame, text="Rounded", variable=self.panelrounded_var,
                        command=lambda: self._schedule(0)).pack(side="left", padx=(4, 0))
         self.textpanel_var.trace_add("write", lambda *_: self._schedule(400))
-        tk.Label(f, text="Line spacing:").grid(row=12, column=2, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.linespacing_var, width=5).grid(row=12, column=3, sticky="w", **pad)
+        tk.Label(f, text="Line spacing:").grid(row=11, column=2, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.linespacing_var, width=5).grid(row=11, column=3, sticky="w", **pad)
         self.linespacing_var.trace_add("write", lambda *_: self._schedule(400))
+
+        # Reserve
+        tk.Label(f, text="Reserve %:").grid(row=12, column=0, sticky="e", **pad)
+        res_frame = tk.Frame(f)
+        res_frame.grid(row=12, column=1, columnspan=3, sticky="w", **pad)
+        for _lbl, _var in (("T", self.reserve_top_var),  ("R", self.reserve_right_var),
+                            ("B", self.reserve_bottom_var), ("L", self.reserve_left_var)):
+            tk.Label(res_frame, text=f"{_lbl}:").pack(side="left")
+            tk.Entry(res_frame, textvariable=_var, width=4).pack(side="left", padx=(0, 8))
+            _var.trace_add("write", lambda *_: self._schedule(400))
 
         # Themes
         self.theme_var = tk.StringVar()
@@ -371,11 +402,15 @@ class TextImageView:
         tk.Button(tbf, text="Default", padx=3, command=self._make_default_theme).pack(side="left")
         self._update_theme_dropdown()
 
-        # Preview size / Copy command / Save image
+        # Preview size / Play-Pause / Copy command / Save image
         tk.Checkbutton(f, text="Preview at half size", variable=self.half_size_var,
                        command=self._on_half_size_toggle).grid(row=14, column=0, columnspan=2, sticky="w", **pad)
-        tk.Button(f, text="Copy cmd", command=self._copy_cmd).grid(row=14, column=2, sticky="e", pady=3)
-        tk.Button(f, text="Save Image…", command=self._save_image).grid(row=14, column=3, sticky="e", padx=(0, 8), pady=3)
+        _act_frame = tk.Frame(f)
+        _act_frame.grid(row=14, column=2, columnspan=2, sticky="e", padx=(0, 8), pady=3)
+        self.live_btn = tk.Button(_act_frame, text="Pause", width=6, command=self._toggle_live)
+        self.live_btn.pack(side="left", padx=(0, 4))
+        tk.Button(_act_frame, text="Copy cmd", command=self._copy_cmd).pack(side="left", padx=(0, 4))
+        tk.Button(_act_frame, text="Save Image…", command=self._save_image).pack(side="left")
 
         # Status
         tk.Label(f, textvariable=self.status_var, fg="gray45",
@@ -728,6 +763,14 @@ class TextImageView:
         tscale = int(ts) if re.fullmatch(r"\d+", ts) else 100
         target_w = int(img_w * 0.896 * tscale / 100.0)
         target_h = int(img_h * 0.741 * tscale / 100.0)
+        for _side, _var in (("top",    self.reserve_top_var),    ("right",  self.reserve_right_var),
+                             ("bottom", self.reserve_bottom_var), ("left",   self.reserve_left_var)):
+            _pct = _var.get().strip()
+            if re.fullmatch(r'\d+', _pct) and int(_pct) > 0:
+                if _side in ("top", "bottom"):
+                    target_h = max(1, int(target_h * (1.0 - int(_pct) / 100.0)))
+                else:
+                    target_w = max(1, int(target_w * (1.0 - int(_pct) / 100.0)))
         ls = self.linespacing_var.get().strip()
         linespacing = int(ls) if re.fullmatch(r"-?\d+", ls) and ls != "0" else 0
         hi = min(target_w // 2, target_h)
@@ -862,6 +905,12 @@ class TextImageView:
         if re.fullmatch(r'-?\d+', toffy) and toffy != "0":
             cmd.append(f"--textoffy={toffy}")
 
+        for _side, _var in (("top",    self.reserve_top_var),    ("right",  self.reserve_right_var),
+                             ("bottom", self.reserve_bottom_var), ("left",   self.reserve_left_var)):
+            _pct = _var.get().strip()
+            if re.fullmatch(r'\d+', _pct) and int(_pct) > 0:
+                cmd.append(f"--reserve={_side},{_pct}")
+
         return cmd
 
     def _copy_cmd(self):
@@ -903,9 +952,17 @@ class TextImageView:
     # ── Rendering ─────────────────────────────────────────────────────────────
 
     def _schedule(self, delay_ms: int = 400):
+        if not self._live_active:
+            return
         if self._after_id is not None:
             self.root.after_cancel(self._after_id)
         self._after_id = self.root.after(delay_ms, self._render)
+
+    def _toggle_live(self):
+        self._live_active = not self._live_active
+        self.live_btn.config(text="Pause" if self._live_active else "Play")
+        if self._live_active:
+            self._schedule(0)
 
     def _render(self):
         self._after_id = None
