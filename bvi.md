@@ -29,6 +29,7 @@ A C++ program that renders a Bible verse reference (or custom text) to a JPEG im
 - Outline around verse text for stronger emphasis (`--textoutline[=N]`, `--textoutlinecolor`)
 - Shadow style: soft Gaussian blur or hard offset copy (`--shadowmethod`)
 - Adjustable line spacing (`--linespacing`)
+- Reserve a portion of the image from any side, centering verse text in the remaining space (`--reserve`)
 - Custom font support
 - Config file (`.luminaverse` `[bvi]` section) stores per-folder defaults for version, size, colors, and style
 - Default output filename derived from the reference (e.g. `John_3_16.jpg`)
@@ -262,6 +263,31 @@ Fine-tune the vertical position of the verse text and citation independently.
 
 Both default to `0` (no adjustment).
 
+## Reserve
+
+Keep a portion of the image empty on one or more sides and center the verse text in the remaining space. Useful for placing text alongside a photo subject, a logo, or another UI element.
+
+Use `--reserve=SIDE,PCT` once per side. Each side independently shrinks the text canvas and shifts the center into the remaining region. Multiple sides compose correctly.
+
+```bash
+./bvi "John 3:16" --reserve=top,30                          # reserve 30% at top; verse in bottom 70%
+./bvi "John 3:16" --reserve=right,40                        # reserve 40% at right; verse in left 60%
+./bvi "John 3:16" --reserve=left,30 --reserve=top,20        # reserve left 30% and top 20%; verse in remaining bottom-right area
+./bvi "John 3:16" --reserve=left,25 --reserve=right,25      # center column; equal margins
+```
+
+SIDE is `top`, `right`, `bottom`, or `left`; PCT is 0–90.
+
+| Option | Description |
+|---|---|
+| `--reserve=SIDE,PCT` | Reserve PCT% from SIDE; repeat for multiple sides |
+
+Reserve can be combined with `--textoffy` for fine-tuning within the remaining area:
+
+```bash
+./bvi "John 3:16" --reserve=top,30 --reserve=left,20 --textoffy=10
+```
+
 ## Citation
 
 ### Style
@@ -452,9 +478,13 @@ shadowmethod     = 1
 linespacing      = 0
 textoffy         = 0
 citeoffy         = 0
+reservetop       = 0
+reserveright     = 0
+reservebottom    = 0
+reserveleft      = 0
 ```
 
-Supported keys: `bv`, `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `citecolor`, `citefont`, `quotes`, `citesize`, `citescale`, `citestyle`, `citeplacement`, `citebibleversion`, `citeshadow`, `citealign`, `citepanel`, `textsize`, `maxtextsize`, `textscale`, `textpanel`, `textpanelcolor`, `textshadow`, `shadowmethod`, `linespacing`, `textoffy`, `citeoffy`
+Supported keys: `bv`, `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `citecolor`, `citefont`, `quotes`, `citesize`, `citescale`, `citestyle`, `citeplacement`, `citebibleversion`, `citeshadow`, `citealign`, `citepanel`, `textsize`, `maxtextsize`, `textscale`, `textpanel`, `textpanelcolor`, `textpanelrounded`, `textshadow`, `shadowmethod`, `textoutline`, `textoutlinecolor`, `linespacing`, `textoffy`, `citeoffy`, `reservetop`, `reserveright`, `reservebottom`, `reserveleft`
 
 ## Bible Translations
 
@@ -494,7 +524,8 @@ If a Bible translation file is not found, the program will prompt you to downloa
 | Cite panel | `independent` / `coverbottom` / `none` — how the text panel relates to the bottom citation |
 | Text off Y | Nudge verse text up (negative) or down (positive) |
 | Cite off Y | Nudge citation toward bottom (positive) or away (negative) |
-| Shadow method | `1` = soft Gaussian blur, `2` = hard offset copy |
+| Reserve % T/R/B/L | Reserve a percentage of each side; verse text centers in the remaining area |
+| Shadow method | `1` = soft Gaussian blur, `2` = hard offset copy (drop-down) |
 | Quotes checkbox | Toggle curly quotes |
 
 Chapter and verse boundaries are respected using the loaded Bible file — navigation wraps correctly at chapter ends and beginnings.
