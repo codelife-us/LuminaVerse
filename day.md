@@ -1,6 +1,6 @@
 # day
 
-A small C++ utility that prints the current day of the year (Jan 1 = 1) and opens a YouTube search for the day's video. Opening YouTube is the default behavior; use `-d` to print the day number only.
+A small C++ utility that prints the current day of the year (Jan 1 = 1).
 
 ## Building
 
@@ -11,18 +11,23 @@ g++ -std=c++11 -o day day.cpp
 ## Usage
 
 ```bash
-./day          # print day number and open YouTube search
-./day -d       # print day number only, no YouTube
+./day                  # print day number
+./day -r               # print Bible reference only
+./day -p               # print day number, date, and Bible reference
+./day -y               # print day number and open YouTube search
+./day -d=4/30/2026 -r  # reference for a specific date
 ```
 
 ## Options
 
 | Option | Description |
 |--------|-------------|
-| `-d`, `--day` | Print day number only, no YouTube |
-| `-d=N`, `--day=N` | Use day N instead of today (still opens YouTube) |
-| `-y`, `--youtube` | Open YouTube (explicit; already the default) |
-| `-q=TEXT`, `--query=TEXT` | Override the YouTube search query (`{day}` = day number) |
+| `-d=N`, `--day=N` | Use day N instead of today |
+| `-d=mm/dd/yyyy` | Use a date instead of a day number (4-digit or 2-digit year) |
+| `-y`, `--youtube` | Open YouTube Bible Recap search |
+| `-q=TEXT`, `--query=TEXT` | Override the YouTube search query (`{day}` = day number); implies `-y` |
+| `-r`, `--refonly` | Print Bible reference only |
+| `-p`, `--plan` | Print day number, date, and Bible reference |
 | `-h`, `--help` | Show help |
 
 ## Config file (.day)
@@ -38,38 +43,43 @@ Query priority: `-q=` flag → `.day` in current dir → `.day` in `$HOME` → b
 
 ## Examples
 
-Open YouTube for today's Bible Recap:
+Print today's day number:
 ```bash
 ./day
+```
+
+Open YouTube for today's Bible Recap:
+```bash
 ./day -y
 ```
 
-Print day number only:
+Open YouTube for a specific day or date:
 ```bash
-./day -d
-./day --day
+./day -d=203 -y
+./day -d=4/30/2026 -y
+./day -d=12/25/25 -y
 ```
 
-Open YouTube for a specific day:
-```bash
-./day -d=203
-./day --day=203
-```
-
-Custom search query:
+Custom search query (opens YouTube automatically):
 ```bash
 ./day -q="Day {day} The Bible Recap"
 ./day --query="Day {day} The Bible Recap"
 ```
 
-## Composing with other tools
-
-Open today's Bible Recap on YouTube and print the reading plan:
+Print today's Bible reference only:
 ```bash
-./day && ./bv -d
+./day -r
+./day -d=3/21/2026 -r
 ```
 
-Print today's reading plan (day number only, piped to bv):
+Print today's reading plan (day number, date, reference):
 ```bash
-./bv -d=$(./day -d)
+./day -p
+```
+
+## Composing with other tools
+
+```bash
+./bv -d=$(./day)          # pipe day number into bv
+./day -r && ./day -y      # print reference then open YouTube
 ```

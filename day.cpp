@@ -3,8 +3,8 @@
 //
 // day.cpp — Print the current day of the year (Jan 1 = 1)
 // Build: g++ -std=c++11 -o day day.cpp
-// Default: print day number and open YouTube Bible Recap search.
-// -d/--day prints day number only (no YouTube).
+// Default: print day number only.
+// -y/--youtube opens YouTube Bible Recap search.
 // Query template loaded from .day in current dir or $HOME.
 #include <iostream>
 #include <fstream>
@@ -17,6 +17,20 @@ using namespace std;
 static int dayOfYear() {
     time_t t = time(nullptr);
     return localtime(&t)->tm_yday + 1;
+}
+
+// Parse mm/dd/yyyy or mm/dd/yy → day of year; returns -1 on failure.
+static int parseDateArg(const string& s) {
+    int mm = 0, dd = 0, yyyy = 0;
+    if (sscanf(s.c_str(), "%d/%d/%d", &mm, &dd, &yyyy) != 3) return -1;
+    if (yyyy < 100) yyyy += 2000;
+    struct tm t = {};
+    t.tm_year = yyyy - 1900;
+    t.tm_mon  = mm - 1;
+    t.tm_mday = dd;
+    t.tm_hour = 12;
+    if (mktime(&t) == (time_t)-1) return -1;
+    return t.tm_yday + 1;
 }
 
 static string urlEncode(const string& s) {
@@ -62,8 +76,9 @@ static string loadQueryFile() {
 }
 
 int main(int argc, char* argv[]) {
-    bool   dayOnly     = false;
+    bool   openYoutube = false;
     bool   planMode    = false;
+    bool   refOnly     = false;
     int    dayOverride = -1;   // -1 = use current day
     string queryTpl;           // empty = load from .day file or use built-in default
 
@@ -71,42 +86,56 @@ int main(int argc, char* argv[]) {
         string arg = argv[i];
         if (arg == "-h" || arg == "--help") {
             cout << "day — print the current day of the year (Jan 1 = 1)\n\n"
-                 << "Usage: day [-d[=N]|--day[=N]] [-y|--youtube] [-q=TEXT|--query=TEXT] [-p|--plan]\n\n"
-                 << "  (default)              Print day number and open YouTube The Bible Recap search\n"
-                 << "  -d, --day              Print day number only, no YouTube\n"
-                 << "  -d=N, --day=N          Use day N instead of today (still opens YouTube)\n"
-                 << "  -y, --youtube          Open YouTube (explicit; already the default)\n"
-                 << "  -q=TEXT, --query=TEXT  Override search query ({day} = day number)\n"
-                 << "  -p, --plan             Print day number and run: bv --day --refonly\n"
+                 << "Usage: day [-d[=N]|--day[=N]] [-y|--youtube] [-q=TEXT|--query=TEXT] [-p|--plan] [-r|--refonly]\n\n"
+                 << "  (default)              Print day number only\n"
+                 << "  -d=N, --day=N          Use day N instead of today\n"
+                 << "  -d=mm/dd/yyyy          Use date instead of day number (4-digit or 2-digit year)\n"
+                 << "  -y, --youtube          Open YouTube Bible Recap search\n"
+                 << "  -q=TEXT, --query=TEXT  Override search query ({day} = day number); implies -y\n"
+                 << "  -p, --plan             Print day number, date, and Bible reference\n"
+                 << "  -r, --refonly          Print Bible reference only\n"
                  << "  -h, --help             Show this help\n\n"
                  << "Config file (.day in current dir or $HOME):\n"
                  << "  First non-blank, non-comment line is used as the default query.\n"
                  << "  Lines starting with # are ignored.\n"
                  << "  Example contents:  Day {day} The Bible Recap\n\n"
                  << "Examples:\n"
-                 << "  day                               # open YouTube for today's recap\n"
-                 << "  day -d                            # print day number only\n"
-                 << "  day -d=203                        # open YouTube for day 203\n"
-                 << "  day -q=\"Day {day} The Bible Recap\" # custom query\n"
-                 << "  day -p                            # print day number and run bv --day --refonly\n";
+                 << "  day                               # print day number\n"
+                 << "  day -r                            # print today's Bible reference\n"
+                 << "  day -d=3/21/2026 -r               # Bible reference for a specific date\n"
+                 << "  day -y                            # open YouTube for today's recap\n"
+                 << "  day -d=203 -y                     # open YouTube for day 203\n"
+                 << "  day -q=\"Day {day} The Bible Recap\" # custom query, opens YouTube\n"
+                 << "  day -p                            # print day number, date, and reference\n";
             return 0;
         } else if (arg.find("-d=") == 0 || arg.find("--day=") == 0) {
-            dayOverride = stoi(arg.substr(arg.find('=') + 1));
-            dayOnly = false;
+            string val = arg.substr(arg.find('=') + 1);
+            dayOverride = (val.find('/') != string::npos) ? parseDateArg(val) : stoi(val);
         } else if (arg == "-d" || arg == "--day") {
-            dayOnly = true;
+            // no-op: day-only is now the default
         } else if (arg == "--youtube" || arg == "-y") {
-            dayOnly = false;
+            openYoutube = true;
         } else if (arg.find("--query=") == 0) {
             queryTpl = arg.substr(8);
+            openYoutube = true;
         } else if (arg.find("-q=") == 0) {
             queryTpl = arg.substr(3);
+            openYoutube = true;
         } else if (arg == "-p" || arg == "--plan") {
             planMode = true;
+        } else if (arg == "-r" || arg == "--refonly") {
+            refOnly = true;
         }
     }
 
     int day = (dayOverride > 0) ? dayOverride : dayOfYear();
+
+    if (refOnly) {
+        ifstream localBv("./bv");
+        string baseBv = localBv.good() ? "./bv" : "bv";
+        return system((baseBv + " --day=" + to_string(day) + " --refonly").c_str());
+    }
+
     cout << day << "\n";
 
     if (planMode) {
@@ -122,16 +151,13 @@ int main(int argc, char* argv[]) {
         char dateBuf[64];
         strftime(dateBuf, sizeof(dateBuf), "%x", &target);
         cout << dateBuf << "\n";
-        
+        cout.flush();
+
         ifstream localBv("./bv");
-        
-        // Dynamically append the specific day to the bv command
         string baseBv = localBv.good() ? "./bv" : "bv";
-        string bvCmd = baseBv + " --day=" + to_string(day) + " --refonly";
-        
-        return system(bvCmd.c_str());
+        return system((baseBv + " --day=" + to_string(day) + " --refonly").c_str());
     }
-    if (!dayOnly) {
+    if (openYoutube) {
         if (queryTpl.empty()) {
             queryTpl = loadQueryFile();
             if (queryTpl.empty()) queryTpl = "Day {day} The Bible Recap";
