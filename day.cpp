@@ -84,7 +84,10 @@ int main(int argc, char* argv[]) {
 
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];
-        if (arg == "-h" || arg == "--help") {
+        if (arg == "-v" || arg == "--version") {
+            cout << "1.0\n";
+            return 0;
+        } else if (arg == "-h" || arg == "--help") {
             cout << "day — print the current day of the year (Jan 1 = 1)\n\n"
                  << "Usage: day [-d[=N]|--day[=N]] [-y|--youtube] [-q=TEXT|--query=TEXT] [-p|--plan] [-r|--refonly]\n\n"
                  << "  (default)              Print day number only\n"
@@ -94,6 +97,7 @@ int main(int argc, char* argv[]) {
                  << "  -q=TEXT, --query=TEXT  Override search query ({day} = day number); implies -y\n"
                  << "  -p, --plan             Print day number, date, and Bible reference\n"
                  << "  -r, --refonly          Print Bible reference only\n"
+                 << "  -v, --version          Print version\n"
                  << "  -h, --help             Show this help\n\n"
                  << "Config file (.day in current dir or $HOME):\n"
                  << "  First non-blank, non-comment line is used as the default query.\n"
