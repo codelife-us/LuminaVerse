@@ -80,9 +80,13 @@ THEME_KEYS = [
     ("reserveright",     "reserve_right_var",     "str",  "0"),
     ("reservebottom",    "reserve_bottom_var",    "str",  "0"),
     ("reserveleft",      "reserve_left_var",      "str",  "0"),
-    ("text2color",       "text2color_var",        "str",  ""),
-    ("text2font",        "text2font_var",         "str",  ""),
-    ("text2gap",         "text2gap_var",          "str",  "40"),
+    ("text2color",        "text2color_var",         "str",  ""),
+    ("text2font",         "text2font_var",          "str",  ""),
+    ("text2gap",          "text2gap_var",           "str",  "40"),
+    ("text2outline",      "text2outline_var",       "str",  ""),
+    ("text2outlinecolor", "text2outlinecolor_var",  "str",  ""),
+    ("text2shadow",       "text2shadow_var",        "str",  ""),
+    ("text2shadowmethod", "text2shadowmethod_var",  "str",  ""),
 ]
 
 
@@ -267,7 +271,11 @@ class TextImageView:
         self.reserve_left_var   = tk.StringVar(value=_cfg("reserveleft",   "0"))
         self.text2color_var     = tk.StringVar(value=_cfg("text2color", ""))
         self.text2font_var      = tk.StringVar(value=_cfg("text2font",  ""))
-        self.text2gap_var       = tk.StringVar(value=_cfg("text2gap",   "40"))
+        self.text2gap_var           = tk.StringVar(value=_cfg("text2gap",          "40"))
+        self.text2outline_var       = tk.StringVar(value=_cfg("text2outline",      ""))
+        self.text2outlinecolor_var  = tk.StringVar(value=_cfg("text2outlinecolor", ""))
+        self.text2shadow_var        = tk.StringVar(value=_cfg("text2shadow",       ""))
+        self.text2shadowmethod_var  = tk.StringVar(value=_cfg("text2shadowmethod", ""))
         half_size_saved         = self._live_state.get("half_size", "yes")
         self.half_size_var      = tk.BooleanVar(value=half_size_saved != "no")
         self.status_var         = tk.StringVar(value="Ready")
@@ -296,58 +304,136 @@ class TextImageView:
         f.columnconfigure(1, minsize=round(110 * s))
         f.columnconfigure(2, minsize=round(110 * s))
 
-        # Width / Height
-        tk.Label(f, text="Width:").grid(row=0, column=0, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.width_var, width=6).grid(row=0, column=1, sticky="w", **pad)
+        # ── Row 0: Theme + Zoom ──────────────────────────────────────────────────
+        self.theme_var = tk.StringVar()
+        tk.Label(f, text="Theme:").grid(row=0, column=0, sticky="e", **pad)
+        self.theme_cb = ttk.Combobox(f, textvariable=self.theme_var, state="readonly", width=18)
+        self.theme_cb.grid(row=0, column=1, sticky="ew", **pad)
+        self.theme_cb.bind("<<ComboboxSelected>>", lambda _: self._on_theme_select())
+        tbf = tk.Frame(f)
+        tbf.grid(row=0, column=2, sticky="w", padx=(4, 0), pady=round(3 * s))
+        tk.Button(tbf, text="Save…",   padx=3, command=self._save_theme_dialog).pack(side="left", padx=(0, 3))
+        tk.Button(tbf, text="Delete",  padx=3, command=self._delete_theme).pack(side="left", padx=(0, 3))
+        tk.Button(tbf, text="Default", padx=3, command=self._make_default_theme).pack(side="left")
+        _zoom_f = tk.Frame(f)
+        _zoom_f.grid(row=0, column=3, sticky="e", padx=(0, round(6 * s)), pady=round(3 * s))
+        tk.Button(_zoom_f, text="−", width=2, command=lambda: self._zoom(-0.1)).pack(side="left")
+        tk.Label(_zoom_f, text=f"{round(s * 100)}%", width=4).pack(side="left", padx=2)
+        tk.Button(_zoom_f, text="+", width=2, command=lambda: self._zoom(0.1)).pack(side="left")
+        self.root.bind("<Control-equal>", lambda _e: self._zoom(0.1))
+        self.root.bind("<Control-minus>",  lambda _e: self._zoom(-0.1))
+        self.root.bind("<Control-0>",      lambda _e: self._zoom(0))
+        self._update_theme_dropdown()
+
+        # ── Row 1: Preview toggle + action buttons ────────────────────────────
+        tk.Checkbutton(f, text="Preview at half size", variable=self.half_size_var,
+                       command=self._on_half_size_toggle).grid(row=1, column=0, columnspan=2, sticky="w", **pad)
+        _act_frame = tk.Frame(f)
+        _act_frame.grid(row=1, column=2, columnspan=2, sticky="e", padx=(0, 8), pady=round(3 * s))
+        self.live_btn = tk.Button(_act_frame, text="Pause", width=6, command=self._toggle_live)
+        self.live_btn.pack(side="left", padx=(0, 4))
+        tk.Button(_act_frame, text="Copy cmd", command=self._copy_cmd).pack(side="left", padx=(0, 4))
+        tk.Button(_act_frame, text="Save Image…", command=self._save_image).pack(side="left")
+
+        # ── Row 2: Width / Height ─────────────────────────────────────────────
+        tk.Label(f, text="Width:").grid(row=2, column=0, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.width_var, width=6).grid(row=2, column=1, sticky="w", **pad)
         self.width_var.trace_add("write", lambda *_: self._schedule(600))
-        tk.Label(f, text="Height:").grid(row=0, column=2, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.height_var, width=6).grid(row=0, column=3, sticky="w", **pad)
+        tk.Label(f, text="Height:").grid(row=2, column=2, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.height_var, width=6).grid(row=2, column=3, sticky="w", **pad)
         self.height_var.trace_add("write", lambda *_: self._schedule(600))
 
-        # Max text pt / Text scale %
-        tk.Label(f, text="Max text pt:").grid(row=1, column=0, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.maxtextsize_var, width=6).grid(row=1, column=1, sticky="w", **pad)
+        # ── Row 3: Max text pt / Text scale % ────────────────────────────────
+        tk.Label(f, text="Max text pt:").grid(row=3, column=0, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.maxtextsize_var, width=6).grid(row=3, column=1, sticky="w", **pad)
         self.maxtextsize_var.trace_add("write", lambda *_: self._schedule(400))
-        tk.Label(f, text="Text scale %:").grid(row=1, column=2, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.textscale_var, width=6).grid(row=1, column=3, sticky="w", **pad)
+        tk.Label(f, text="Text scale %:").grid(row=3, column=2, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.textscale_var, width=6).grid(row=3, column=3, sticky="w", **pad)
         self.textscale_var.trace_add("write", lambda *_: self._schedule(400))
 
-        # Text pt (absolute) / Text Y offset
-        tk.Label(f, text="Text pt:").grid(row=2, column=0, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.textsize_var, width=6).grid(row=2, column=1, sticky="w", **pad)
+        # ── Row 4: Text pt / Text off Y ──────────────────────────────────────
+        tk.Label(f, text="Text pt:").grid(row=4, column=0, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.textsize_var, width=6).grid(row=4, column=1, sticky="w", **pad)
         self.textsize_var.trace_add("write", lambda *_: self._schedule(400))
-        tk.Label(f, text="Text off Y:").grid(row=2, column=2, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.textoffy_var, width=5).grid(row=2, column=3, sticky="w", **pad)
+        tk.Label(f, text="Text off Y:").grid(row=4, column=2, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.textoffy_var, width=5).grid(row=4, column=3, sticky="w", **pad)
         self.textoffy_var.trace_add("write", lambda *_: self._schedule(400))
 
-        # Colors
-        self._make_color_row(f, "BG:",              self.bg_var,             4)
-        self._make_color_row(f, "Text panel color:", self.textpanelcolor_var, 5)
+        # ── Row 5: BG color / Text panel color ───────────────────────────────
+        self._make_color_row(f, "BG:",               self.bg_var,             5)
+        self._make_color_row(f, "Text panel color:", self.textpanelcolor_var, 6)
 
-        # BG Photo
-        tk.Label(f, text="BG photo:").grid(row=6, column=0, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.bgphoto_var, width=28).grid(row=6, column=1, columnspan=2, sticky="ew", **pad)
+        # ── Row 7: BG Photo ───────────────────────────────────────────────────
+        tk.Label(f, text="BG photo:").grid(row=7, column=0, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.bgphoto_var, width=28).grid(row=7, column=1, columnspan=2, sticky="ew", **pad)
         self.bgphoto_var.trace_add("write", lambda *_: self._schedule(400))
         tk.Button(f, text="…", padx=2,
-                  command=self._browse_bgphoto).grid(row=6, column=3, sticky="w", padx=(0, 6), pady=3)
+                  command=self._browse_bgphoto).grid(row=7, column=3, sticky="w", padx=(0, 6), pady=round(3 * s))
 
-        # Dim % / Text shadow / Shadow method
-        tk.Label(f, text="Dim %:").grid(row=7, column=0, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.dim_var, width=5).grid(row=7, column=1, sticky="w", **pad)
+        # ── Row 8: Dim % / Text panel % + Rounded / Line spacing ─────────────
+        tk.Label(f, text="Dim %:").grid(row=8, column=0, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.dim_var, width=5).grid(row=8, column=1, sticky="w", **pad)
         self.dim_var.trace_add("write", lambda *_: self._schedule(400))
+        tp_frame = tk.Frame(f)
+        tp_frame.grid(row=8, column=2, sticky="w", **pad)
+        tk.Label(tp_frame, text="Panel %:").pack(side="left")
+        tk.Entry(tp_frame, textvariable=self.textpanel_var, width=4).pack(side="left", padx=(2, 4))
+        tk.Checkbutton(tp_frame, text="Rounded", variable=self.panelrounded_var,
+                       command=lambda: self._schedule(0)).pack(side="left")
+        self.textpanel_var.trace_add("write", lambda *_: self._schedule(400))
+
+        # ── Row 9: Line spacing / Reserve % ──────────────────────────────────
+        tk.Label(f, text="Line spacing:").grid(row=9, column=0, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.linespacing_var, width=5).grid(row=9, column=1, sticky="w", **pad)
+        self.linespacing_var.trace_add("write", lambda *_: self._schedule(400))
+        tk.Label(f, text="Reserve %:").grid(row=9, column=2, sticky="e", **pad)
+        res_frame = tk.Frame(f)
+        res_frame.grid(row=9, column=3, sticky="w", **pad)
+        for _lbl, _var in (("T", self.reserve_top_var), ("R", self.reserve_right_var),
+                            ("B", self.reserve_bottom_var), ("L", self.reserve_left_var)):
+            tk.Label(res_frame, text=f"{_lbl}:").pack(side="left")
+            tk.Entry(res_frame, textvariable=_var, width=3).pack(side="left", padx=(0, 4))
+            _var.trace_add("write", lambda *_: self._schedule(400))
+
+        # ── Row 10: Text 1 ────────────────────────────────────────────────────
+        tk.Label(f, text="Text 1:").grid(row=10, column=0, sticky="ne", padx=8, pady=6)
+        self.text_widget = tk.Text(f, height=4, width=36, wrap="word",
+                                   font=("", round(12 * s)), relief="solid", borderwidth=1)
+        self.text_widget.grid(row=10, column=1, columnspan=3, sticky="ew", padx=8, pady=6)
+        self.text_widget.bind("<KeyRelease>", lambda _: self._schedule(400))
+        self.text_widget.bind("<<Paste>>",    lambda _: self._schedule(500))
+
+        # ── Row 11: Text 1 font ───────────────────────────────────────────────
+        tk.Label(f, text="Text 1 font:").grid(row=11, column=0, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.font_var, width=28).grid(row=11, column=1, columnspan=2, sticky="ew", **pad)
+        self.font_var.trace_add("write", lambda *_: self._schedule(400))
+        tk.Button(f, text="…", padx=2,
+                  command=self._browse_font).grid(row=11, column=3, sticky="w", padx=(0, 6), pady=round(3 * s))
+
+        # ── Row 12: Text 1 color ──────────────────────────────────────────────
+        self._make_color_row(f, "Text 1 color:", self.textcolor_var, 12)
+
+        # ── Row 13: Text 1 outline px / outline color ─────────────────────────
+        tk.Label(f, text="Text 1 outline px:").grid(row=13, column=0, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.textoutline_var, width=3).grid(row=13, column=1, sticky="w", **pad)
+        self.textoutline_var.trace_add("write", lambda *_: self._schedule(400))
+        self._make_color_row(f, "Outline color:", self.textoutlinecolor_var, 13, col_start=2)
+
+        # ── Row 14: Text 1 shadow / shadow method ─────────────────────────────
+        tk.Label(f, text="Text 1 shadow (0-10):").grid(row=14, column=0, sticky="e", **pad)
         _shd_frame = tk.Frame(f)
-        _shd_frame.grid(row=7, column=2, columnspan=2, sticky="w", padx=6, pady=3)
-        tk.Label(_shd_frame, text="Shadow (0-10):").pack(side="left")
-        tk.Entry(_shd_frame, textvariable=self.textshadow_var, width=3).pack(side="left", padx=(2, 6))
+        _shd_frame.grid(row=14, column=1, sticky="w", **pad)
+        tk.Entry(_shd_frame, textvariable=self.textshadow_var, width=3).pack(side="left", padx=(0, 6))
         self.textshadow_var.trace_add("write", lambda *_: self._schedule(400))
-        tk.Label(_shd_frame, text="Method:").pack(side="left")
+        tk.Label(f, text="Method:").grid(row=14, column=2, sticky="e", **pad)
         _SM_OPTS = ["1 – Soft (Gaussian)", "2 – Hard (copy)"]
-        self._sm_cb = ttk.Combobox(_shd_frame, values=_SM_OPTS, state="readonly", width=17)
+        self._sm_cb = ttk.Combobox(f, textvariable=self.shadowmethod_var, values=_SM_OPTS,
+                                   state="readonly", width=17)
         try:
             self._sm_cb.current(int(self.shadowmethod_var.get()) - 1)
         except (ValueError, IndexError):
             self._sm_cb.current(0)
-        self._sm_cb.pack(side="left", padx=(2, 0))
+        self._sm_cb.grid(row=14, column=3, sticky="w", **pad)
         def _on_sm_select(_e=None):
             self.shadowmethod_var.set(str(self._sm_cb.current() + 1))
             self._schedule(0)
@@ -359,67 +445,25 @@ class TextImageView:
                 pass
         self.shadowmethod_var.trace_add("write", _sync_sm_cb)
 
-        # Text outline
-        tk.Label(f, text="Text outline px:").grid(row=8, column=0, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.textoutline_var, width=3).grid(row=8, column=1, sticky="w", **pad)
-        self.textoutline_var.trace_add("write", lambda *_: self._schedule(400))
-        self._make_color_row(f, "Outline color:", self.textoutlinecolor_var, 8, col_start=2)
-
-        # Text panel opacity + rounded / Line spacing
-        tk.Label(f, text="Text panel %:").grid(row=9, column=0, sticky="e", **pad)
-        tp_frame = tk.Frame(f)
-        tp_frame.grid(row=9, column=1, sticky="w", **pad)
-        tk.Entry(tp_frame, textvariable=self.textpanel_var, width=5).pack(side="left")
-        tk.Checkbutton(tp_frame, text="Rounded", variable=self.panelrounded_var,
-                       command=lambda: self._schedule(0)).pack(side="left", padx=(4, 0))
-        self.textpanel_var.trace_add("write", lambda *_: self._schedule(400))
-        tk.Label(f, text="Line spacing:").grid(row=9, column=2, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.linespacing_var, width=5).grid(row=9, column=3, sticky="w", **pad)
-        self.linespacing_var.trace_add("write", lambda *_: self._schedule(400))
-
-        # Reserve
-        tk.Label(f, text="Reserve %:").grid(row=10, column=0, sticky="e", **pad)
-        res_frame = tk.Frame(f)
-        res_frame.grid(row=10, column=1, columnspan=3, sticky="w", **pad)
-        for _lbl, _var in (("T", self.reserve_top_var),  ("R", self.reserve_right_var),
-                            ("B", self.reserve_bottom_var), ("L", self.reserve_left_var)):
-            tk.Label(res_frame, text=f"{_lbl}:").pack(side="left")
-            tk.Entry(res_frame, textvariable=_var, width=4).pack(side="left", padx=(0, 8))
-            _var.trace_add("write", lambda *_: self._schedule(400))
-
-        # Text 1 input
-        tk.Label(f, text="Text 1:").grid(row=11, column=0, sticky="ne", padx=8, pady=6)
-        self.text_widget = tk.Text(f, height=4, width=36, wrap="word", font=("", round(12 * s)))
-        self.text_widget.grid(row=11, column=1, columnspan=3, sticky="ew", padx=8, pady=6)
-        self.text_widget.bind("<KeyRelease>", lambda _: self._schedule(400))
-        self.text_widget.bind("<<Paste>>",    lambda _: self._schedule(500))
-
-        # Text 1 font
-        tk.Label(f, text="Text 1 font:").grid(row=12, column=0, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.font_var, width=28).grid(row=12, column=1, columnspan=2, sticky="ew", **pad)
-        self.font_var.trace_add("write", lambda *_: self._schedule(400))
-        tk.Button(f, text="…", padx=2,
-                  command=self._browse_font).grid(row=12, column=3, sticky="w", padx=(0, 6), pady=3)
-
-        # Text 1 color
-        self._make_color_row(f, "Text 1 color:", self.textcolor_var, 13)
-
-        # Text 2
-        tk.Label(f, text="Text 2:").grid(row=14, column=0, sticky="ne", padx=8, pady=6)
-        self.text2_widget = tk.Text(f, height=3, width=36, wrap="word", font=("", round(12 * s)))
-        self.text2_widget.grid(row=14, column=1, columnspan=3, sticky="ew", padx=8, pady=6)
+        # ── Row 15: Text 2 ────────────────────────────────────────────────────
+        tk.Label(f, text="Text 2:").grid(row=15, column=0, sticky="ne", padx=8, pady=6)
+        self.text2_widget = tk.Text(f, height=3, width=36, wrap="word",
+                                    font=("", round(12 * s)), relief="solid", borderwidth=1)
+        self.text2_widget.grid(row=15, column=1, columnspan=3, sticky="ew", padx=8, pady=6)
         self.text2_widget.bind("<KeyRelease>", lambda _: self._schedule(400))
         self.text2_widget.bind("<<Paste>>",    lambda _: self._schedule(500))
 
-        tk.Label(f, text="Text 2 font:").grid(row=15, column=0, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.text2font_var, width=28).grid(row=15, column=1, columnspan=2, sticky="ew", **pad)
+        # ── Row 16: Text 2 font ───────────────────────────────────────────────
+        tk.Label(f, text="Text 2 font:").grid(row=16, column=0, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.text2font_var, width=28).grid(row=16, column=1, columnspan=2, sticky="ew", **pad)
         self.text2font_var.trace_add("write", lambda *_: self._schedule(400))
         tk.Button(f, text="…", padx=2,
-                  command=self._browse_text2font).grid(row=15, column=3, sticky="w", padx=(0, 6), pady=3)
+                  command=self._browse_text2font).grid(row=16, column=3, sticky="w", padx=(0, 6), pady=round(3 * s))
 
-        tk.Label(f, text="Text 2 color:").grid(row=16, column=0, sticky="e", **pad)
+        # ── Row 17: Text 2 color / Gap px ────────────────────────────────────
+        tk.Label(f, text="Text 2 color:").grid(row=17, column=0, sticky="e", **pad)
         t2c_frame = tk.Frame(f)
-        t2c_frame.grid(row=16, column=1, sticky="w", **pad)
+        t2c_frame.grid(row=17, column=1, sticky="w", **pad)
         tk.Entry(t2c_frame, textvariable=self.text2color_var, width=14).pack(side="left")
         t2c_swatch = tk.Label(t2c_frame, width=2, relief="solid", cursor="hand2")
         t2c_swatch.pack(side="left", padx=(4, 2))
@@ -433,45 +477,46 @@ class TextImageView:
         self.text2color_var.trace_add("write", _refresh_t2c)
         t2c_swatch.bind("<Button-1>", lambda _: self._pick_color(self.text2color_var, t2c_swatch))
         _refresh_t2c()
-
-        tk.Label(f, text="Gap px:").grid(row=16, column=2, sticky="e", **pad)
-        tk.Entry(f, textvariable=self.text2gap_var, width=5).grid(row=16, column=3, sticky="w", **pad)
+        tk.Label(f, text="Gap px:").grid(row=17, column=2, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.text2gap_var, width=5).grid(row=17, column=3, sticky="w", **pad)
         self.text2gap_var.trace_add("write", lambda *_: self._schedule(400))
 
-        # Themes
-        self.theme_var = tk.StringVar()
-        tk.Label(f, text="Theme:").grid(row=17, column=0, sticky="e", **pad)
-        self.theme_cb = ttk.Combobox(f, textvariable=self.theme_var, state="readonly", width=18)
-        self.theme_cb.grid(row=17, column=1, sticky="ew", **pad)
-        self.theme_cb.bind("<<ComboboxSelected>>", lambda _: self._on_theme_select())
-        tbf = tk.Frame(f)
-        tbf.grid(row=17, column=2, columnspan=2, sticky="w", padx=(4, 6), pady=3)
-        tk.Button(tbf, text="Save…",   padx=3, command=self._save_theme_dialog).pack(side="left", padx=(0, 3))
-        tk.Button(tbf, text="Delete",  padx=3, command=self._delete_theme).pack(side="left", padx=(0, 3))
-        tk.Button(tbf, text="Default", padx=3, command=self._make_default_theme).pack(side="left")
-        self._update_theme_dropdown()
+        # ── Row 18: Text 2 outline px / outline color ─────────────────────────
+        tk.Label(f, text="Text 2 outline px:").grid(row=18, column=0, sticky="e", **pad)
+        tk.Entry(f, textvariable=self.text2outline_var, width=3).grid(row=18, column=1, sticky="w", **pad)
+        self.text2outline_var.trace_add("write", lambda *_: self._schedule(400))
+        self._make_color_row(f, "T2 outline color:", self.text2outlinecolor_var, 18, col_start=2)
 
-        # Preview size / Play-Pause / Copy command / Save image
-        tk.Checkbutton(f, text="Preview at half size", variable=self.half_size_var,
-                       command=self._on_half_size_toggle).grid(row=18, column=0, columnspan=2, sticky="w", **pad)
-        _act_frame = tk.Frame(f)
-        _act_frame.grid(row=18, column=2, columnspan=2, sticky="e", padx=(0, 8), pady=3)
-        self.live_btn = tk.Button(_act_frame, text="Pause", width=6, command=self._toggle_live)
-        self.live_btn.pack(side="left", padx=(0, 4))
-        tk.Button(_act_frame, text="Copy cmd", command=self._copy_cmd).pack(side="left", padx=(0, 4))
-        tk.Button(_act_frame, text="Save Image…", command=self._save_image).pack(side="left")
+        # ── Row 19: Text 2 shadow / shadow method ─────────────────────────────
+        tk.Label(f, text="Text 2 shadow (0-10):").grid(row=19, column=0, sticky="e", **pad)
+        _t2shd_frame = tk.Frame(f)
+        _t2shd_frame.grid(row=19, column=1, sticky="w", **pad)
+        tk.Entry(_t2shd_frame, textvariable=self.text2shadow_var, width=3).pack(side="left", padx=(0, 6))
+        self.text2shadow_var.trace_add("write", lambda *_: self._schedule(400))
+        tk.Label(f, text="T2 method:").grid(row=19, column=2, sticky="e", **pad)
+        _T2SM_OPTS = ["1 – Soft (Gaussian)", "2 – Hard (copy)"]
+        self._t2sm_cb = ttk.Combobox(f, textvariable=self.text2shadowmethod_var,
+                                     values=_T2SM_OPTS, state="readonly", width=17)
+        try:
+            idx = int(self.text2shadowmethod_var.get() or "1") - 1
+            self._t2sm_cb.current(max(0, min(1, idx)))
+        except (ValueError, IndexError):
+            self._t2sm_cb.current(0)
+        self._t2sm_cb.grid(row=19, column=3, sticky="w", **pad)
+        def _on_t2sm_select(_e=None):
+            self.text2shadowmethod_var.set(str(self._t2sm_cb.current() + 1))
+            self._schedule(0)
+        self._t2sm_cb.bind("<<ComboboxSelected>>", _on_t2sm_select)
+        def _sync_t2sm_cb(*_):
+            try:
+                self._t2sm_cb.current(int(self.text2shadowmethod_var.get() or "1") - 1)
+            except (ValueError, IndexError):
+                pass
+        self.text2shadowmethod_var.trace_add("write", _sync_t2sm_cb)
 
-        # Status + zoom controls
+        # ── Row 20: Status ────────────────────────────────────────────────────
         tk.Label(f, textvariable=self.status_var, fg="gray45",
-                 anchor="w", width=46).grid(row=19, column=0, columnspan=3, **pad)
-        _zoom_f = tk.Frame(f)
-        _zoom_f.grid(row=19, column=3, sticky="e", padx=(0, round(6 * s)), pady=round(3 * s))
-        tk.Button(_zoom_f, text="−", width=2, command=lambda: self._zoom(-0.1)).pack(side="left")
-        tk.Label(_zoom_f, text=f"{round(s * 100)}%", width=4).pack(side="left", padx=2)
-        tk.Button(_zoom_f, text="+", width=2, command=lambda: self._zoom(0.1)).pack(side="left")
-        self.root.bind("<Control-equal>", lambda _e: self._zoom(0.1))
-        self.root.bind("<Control-minus>",  lambda _e: self._zoom(-0.1))
-        self.root.bind("<Control-0>",      lambda _e: self._zoom(0))
+                 anchor="w", width=46).grid(row=20, column=0, columnspan=4, **pad)
 
     def _make_color_row(self, parent, label: str, var: tk.StringVar, row: int, col_start: int = 0):
         s = getattr(self, 'ui_scale', 1.0)
@@ -1095,6 +1140,18 @@ class TextImageView:
             t2font = self.text2font_var.get().strip()
             if t2font:
                 cmd.append(f"--text2font={t2font}")
+            t2outline = self.text2outline_var.get().strip()
+            if t2outline:
+                cmd.append(f"--text2outline={t2outline}")
+            t2outlinecolor = self.text2outlinecolor_var.get().strip()
+            if t2outlinecolor:
+                cmd.append(f"--text2outlinecolor={t2outlinecolor}")
+            t2shadow = self.text2shadow_var.get().strip()
+            if t2shadow:
+                cmd.append(f"--text2shadow={t2shadow}")
+            t2shadowmethod = self.text2shadowmethod_var.get().strip()
+            if t2shadowmethod and t2shadowmethod != "1":
+                cmd.append(f"--text2shadowmethod={t2shadowmethod}")
 
         return cmd
 
