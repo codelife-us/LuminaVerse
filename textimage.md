@@ -218,6 +218,32 @@ Reserve can be combined with `--textoffy` for fine-tuning within the remaining a
 ./textimage "He is risen." --reserve=top,30 --reserve=left,20 --textoffy=10
 ```
 
+## Stacked Text
+
+Add a second text block below the first with `--text2`. Both blocks auto-fit to half the available height so the combined result stays centered on the canvas.
+
+```bash
+./textimage "He is risen." --text2="Death has no power."
+./textimage "He is risen." --text2="Death has no power." --text2gap=100
+```
+
+Control the gap between the two blocks with `--text2gap=N` (pixels, default 40):
+
+| Option | Default | Description |
+|---|---|---|
+| `--text2=TEXT` | _(none)_ | Second text block stacked below the first |
+| `--text2gap=N` | `40` | Pixel gap between the two text blocks |
+| `--text2color=COLOR` | _(same as `--textcolor`)_ | Text color for the second block |
+| `--text2font=FONT` | _(same as `--font`)_ | Font for the second block |
+
+All rendering options — `--textcolor`, `--textshadow`, `--textoutline`, `--textpanel`, `--bgphoto`, etc. — apply to the combined block.
+
+`\n` works in `--text2` the same as in the primary text:
+
+```bash
+./textimage "He is risen." --text2="Hallelujah.\nAmen."
+```
+
 ## Text Size
 
 By default the text auto-fits to the largest size that fills the canvas. Use one of these options to control the size — `--textsize`/`--maxtextsize` and `--textscale` cannot be combined.

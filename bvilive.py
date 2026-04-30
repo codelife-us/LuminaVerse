@@ -138,7 +138,7 @@ def load_bvilive_state(path: str) -> dict:
                 key = line[:eq].rstrip(" \t")
                 val = line[eq + 1:].lstrip(" \t")
                 if current is None:
-                    if key in ("last_ref", "default_theme", "half_size"):
+                    if key in ("last_ref", "default_theme", "half_size", "font_favorites"):
                         state[key] = val
                 else:
                     state["themes"][current][key] = val
@@ -156,6 +156,8 @@ def save_bvilive_state(path: str, state: dict):
         new_lines.append(f"default_theme = {state['default_theme']}\n")
     if "half_size" in state:
         new_lines.append(f"half_size = {state['half_size']}\n")
+    if state.get("font_favorites"):
+        new_lines.append(f"font_favorites = {state['font_favorites']}\n")
     for name in sorted(state["themes"]):
         new_lines.append(f"\n[theme:{name}]\n")
         for k, v in state["themes"][name].items():
@@ -713,7 +715,7 @@ class BviView:
             self.citefont_var.set(path)
 
     def _font_list_picker(self, current: str = "") -> str:
-        """Searchable font picker scanning all standard font directories."""
+        """Searchable font picker with All / Favorites views and live preview."""
         if sys.platform == "win32":
             win_fonts = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
             dirs = [win_fonts]
@@ -743,6 +745,10 @@ class BviView:
         if not entries:
             return ""
 
+        original_font = self.font_var.get()
+        favs: set = set(filter(None, self._bvilive_state.get("font_favorites", "").split("|")))
+        _preview_id = [None]
+
         dlg = tk.Toplevel(self.root)
         dlg.title("Select Font")
         dlg.grab_set()
@@ -752,24 +758,36 @@ class BviView:
         frame = ttk.Frame(dlg, padding=8)
         frame.pack(fill="both", expand=True)
         frame.columnconfigure(0, weight=1)
-        frame.rowconfigure(1, weight=1)
+        frame.rowconfigure(2, weight=1)
 
-        # Search bar
+        # Search bar + Preview toggle (row 0)
         sf = ttk.Frame(frame)
-        sf.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        sf.grid(row=0, column=0, sticky="ew", pady=(0, 4))
         sf.columnconfigure(1, weight=1)
         ttk.Label(sf, text="Search:").grid(row=0, column=0, padx=(0, 6))
         search_var = tk.StringVar()
         search_entry = ttk.Entry(sf, textvariable=search_var)
         search_entry.grid(row=0, column=1, sticky="ew")
+        preview_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(sf, text="Preview", variable=preview_var).grid(row=0, column=2, padx=(10, 0))
 
-        # Listbox
+        # View toggle (row 1)
+        view_var = tk.StringVar(value="favorites" if favs else "all")
+        vf = ttk.Frame(frame)
+        vf.grid(row=1, column=0, sticky="w", pady=(0, 4))
+        ttk.Label(vf, text="View:").pack(side="left", padx=(0, 6))
+        ttk.Radiobutton(vf, text="All Fonts", variable=view_var, value="all",
+                        command=lambda: populate(search_var.get())).pack(side="left")
+        ttk.Radiobutton(vf, text="Favorites", variable=view_var, value="favorites",
+                        command=lambda: populate(search_var.get())).pack(side="left", padx=(6, 0))
+
+        # Listbox (row 2)
         lbf = ttk.Frame(frame)
-        lbf.grid(row=1, column=0, sticky="nsew")
+        lbf.grid(row=2, column=0, sticky="nsew")
         lbf.columnconfigure(0, weight=1)
         lbf.rowconfigure(0, weight=1)
         sb = ttk.Scrollbar(lbf, orient="vertical")
-        lb = tk.Listbox(lbf, yscrollcommand=sb.set, width=56, height=28,
+        lb = tk.Listbox(lbf, yscrollcommand=sb.set, width=56, height=26,
                         selectmode="single", activestyle="dotbox")
         sb.config(command=lb.yview)
         sb.pack(side="right", fill="y")
@@ -777,13 +795,35 @@ class BviView:
 
         visible: list = []
 
+        def _selected_path() -> str:
+            sel = lb.curselection()
+            return visible[sel[0]][1] if sel else ""
+
+        def _refresh_fav_btn():
+            p = _selected_path()
+            fav_btn.config(text="★ Remove Favorite" if p in favs else "☆ Add to Favorites")
+
+        def _on_select(_=None):
+            _refresh_fav_btn()
+            if not preview_var.get():
+                return
+            p = _selected_path()
+            if p and p != self.font_var.get():
+                self.font_var.set(p)
+                if _preview_id[0]:
+                    self.root.after_cancel(_preview_id[0])
+                _preview_id[0] = self.root.after(150, self._render)
+
         def populate(filter_str: str = ""):
             nonlocal visible
             lb.delete(0, "end")
             fl = filter_str.lower()
-            visible = [(d, p, s) for d, p, s in entries if not fl or fl in d.lower()]
-            for display, _, src in visible:
-                lb.insert("end", f"{display}  [{src}]")
+            pool = [(d, p, s) for d, p, s in entries if p in favs] \
+                   if view_var.get() == "favorites" else entries
+            visible = [(d, p, s) for d, p, s in pool if not fl or fl in d.lower()]
+            for display, path, src in visible:
+                prefix = "★ " if path in favs else "   "
+                lb.insert("end", f"{prefix}{display}  [{src}]")
             if current:
                 cur_name = os.path.splitext(os.path.basename(current))[0]
                 for i, (d, _, _s) in enumerate(visible):
@@ -791,22 +831,49 @@ class BviView:
                         lb.selection_set(i)
                         lb.see(i)
                         break
+            _refresh_fav_btn()
 
-        populate()
+        def _toggle_fav():
+            p = _selected_path()
+            if not p:
+                return
+            if p in favs:
+                favs.discard(p)
+            else:
+                favs.add(p)
+            self._bvilive_state["font_favorites"] = "|".join(sorted(favs))
+            save_bvilive_state(self._bvilive_path, self._bvilive_state)
+            populate(search_var.get())
+            for i, (_, fp, _) in enumerate(visible):
+                if fp == p:
+                    lb.selection_set(i)
+                    lb.see(i)
+                    break
+            _refresh_fav_btn()
+
+        lb.bind("<<ListboxSelect>>", _on_select)
 
         def on_search(*_):
             sel = lb.curselection()
-            sel_display = visible[sel[0]][0] if sel else ""
+            sel_path = visible[sel[0]][1] if sel else ""
             populate(search_var.get())
-            if sel_display:
-                for i, (d, _, _s) in enumerate(visible):
-                    if d == sel_display:
+            if sel_path:
+                for i, (_, p, _) in enumerate(visible):
+                    if p == sel_path:
                         lb.selection_set(i)
                         lb.see(i)
                         break
 
         search_var.trace_add("write", on_search)
         search_entry.focus_set()
+
+        def cancel():
+            if _preview_id[0]:
+                self.root.after_cancel(_preview_id[0])
+            if preview_var.get() and self.font_var.get() != original_font:
+                self.font_var.set(original_font)
+                self.root.after(0, self._render)
+            dlg.destroy()
 
         def confirm(*_):
             sel = lb.curselection()
@@ -816,11 +883,17 @@ class BviView:
 
         lb.bind("<Double-1>", confirm)
         lb.bind("<Return>",   confirm)
+        dlg.protocol("WM_DELETE_WINDOW", cancel)
 
+        # Bottom bar (row 3)
         bf = ttk.Frame(frame)
-        bf.grid(row=2, column=0, sticky="ew", pady=(6, 0))
-        ttk.Button(bf, text="Cancel", command=dlg.destroy).pack(side="right", padx=(4, 0))
+        bf.grid(row=3, column=0, sticky="ew", pady=(6, 0))
+        fav_btn = ttk.Button(bf, text="☆ Add to Favorites", width=20, command=_toggle_fav)
+        fav_btn.pack(side="left")
+        ttk.Button(bf, text="Cancel", command=cancel).pack(side="right", padx=(4, 0))
         ttk.Button(bf, text="OK",     command=confirm).pack(side="right")
+
+        populate()
 
         dlg.wait_window()
         return result[0] if result else ""
@@ -1036,7 +1109,7 @@ class BviView:
 
     def _toggle_live(self):
         self._live_active = not self._live_active
-        self.live_btn.config(text="Pause" if self._live_active else "Play")
+        self.live_btn.config(text="Pause" if self._live_active else "Go Live")
         if self._live_active:
             self._schedule(0)
 

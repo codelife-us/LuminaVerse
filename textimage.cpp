@@ -181,6 +181,7 @@ string detectIM() {
     return "";
 }
 
+
 void printHelp() {
     cout << "textimage v" << TI_VERSION << "\n\n";
     cout << "Usage: textimage \"Text to render\" [OPTIONS]\n";
@@ -188,6 +189,10 @@ void printHelp() {
     cout << "Options:\n";
     cout << "  -h, --help              Show this help message and exit\n";
     cout << "  --text=TEXT             Text to render (alternative to positional argument)\n";
+    cout << "  --text2=TEXT            Second text block stacked below the first\n";
+    cout << "  --text2gap=N            Pixel gap between the two text blocks (default: 40)\n";
+    cout << "  --text2color=COLOR      Text color for the second block (default: same as --textcolor)\n";
+    cout << "  --text2font=FONT        Font for the second block (default: same as --font)\n";
     cout << "  --output=FILE           Output image file (default: derived from text)\n";
     cout << "  --width=N               Image width in pixels (default: 1920)\n";
     cout << "  --height=N              Image height in pixels (default: 1080)\n";
@@ -312,6 +317,10 @@ int main(int argc, char* argv[]) {
     int reserveRight  = max(0, min(90, stoi(cfgGet(cfg, "reserveright",  "0"))));
     int reserveBottom = max(0, min(90, stoi(cfgGet(cfg, "reservebottom", "0"))));
     int reserveLeft   = max(0, min(90, stoi(cfgGet(cfg, "reserveleft",   "0"))));
+    string text2      = cfgGet(cfg, "text2",      "");
+    int    text2gap   = stoi(cfgGet(cfg, "text2gap", "40"));
+    string text2color = cfgGet(cfg, "text2color", "");   // empty = same as textcolor
+    string text2font  = cfgGet(cfg, "text2font",  "");   // empty = same as font
 
     bool saveConfig  = false;
     bool showConfig  = false;
@@ -327,6 +336,14 @@ int main(int argc, char* argv[]) {
             return 0;
         } else if (arg.find("--text=") == 0) {
             inputText = arg.substr(7);
+        } else if (arg.find("--text2=") == 0) {
+            text2 = arg.substr(8);
+        } else if (arg.find("--text2gap=") == 0) {
+            text2gap = max(0, stoi(arg.substr(11)));
+        } else if (arg.find("--text2color=") == 0) {
+            text2color = arg.substr(13);
+        } else if (arg.find("--text2font=") == 0) {
+            text2font = arg.substr(12);
         } else if (arg.find("--output=") == 0) {
             outputFile = arg.substr(9);
         } else if (arg.find("--width=") == 0) {
@@ -439,6 +456,10 @@ int main(int argc, char* argv[]) {
         cout << "  reserve right    = " << (reserveRight  > 0 ? to_string(reserveRight)  : "off") << "\n";
         cout << "  reserve bottom   = " << (reserveBottom > 0 ? to_string(reserveBottom) : "off") << "\n";
         cout << "  reserve left     = " << (reserveLeft   > 0 ? to_string(reserveLeft)   : "off") << "\n";
+        cout << "  text2            = " << (text2.empty() ? "(none)" : text2) << "\n";
+        cout << "  text2gap         = " << text2gap << "\n";
+        cout << "  text2color       = " << (text2color.empty() ? "(same as textcolor)" : text2color) << "\n";
+        cout << "  text2font        = " << (text2font.empty()  ? "(same as font)"      : text2font)  << "\n";
         ifstream check(CONFIG_FILE);
         if (check.good())
             cout << "\nConfig file: ./" << CONFIG_FILE << " (loaded)\n";
@@ -479,7 +500,11 @@ int main(int argc, char* argv[]) {
             "reservetop       = " + to_string(reserveTop),
             "reserveright     = " + to_string(reserveRight),
             "reservebottom    = " + to_string(reserveBottom),
-            "reserveleft      = " + to_string(reserveLeft)
+            "reserveleft      = " + to_string(reserveLeft),
+            "text2            = " + text2,
+            "text2gap         = " + to_string(text2gap),
+            "text2color       = " + text2color,
+            "text2font        = " + text2font
         };
         if (!writeSection(lines)) { cerr << "Error: could not write '" << CONFIG_FILE << "'.\n"; return 1; }
         cerr << "Saved [" << SECTION << "] to ./" << CONFIG_FILE << "\n";
@@ -496,6 +521,8 @@ int main(int argc, char* argv[]) {
 
     for (size_t pos = 0; (pos = inputText.find("\\n", pos)) != string::npos; )
         inputText.replace(pos, 2, "\n");
+    for (size_t pos = 0; (pos = text2.find("\\n", pos)) != string::npos; )
+        text2.replace(pos, 2, "\n");
 
     if (outputFile.empty())
         outputFile = textToFilename(inputText);
@@ -529,6 +556,9 @@ int main(int argc, char* argv[]) {
     int borderH = max(10, (int)(20 * scale));
     int borderW = max(20, (int)(40 * scale));
 
+    // When stacking two texts, give each block half the available height minus the gap.
+    int textH_each = text2.empty() ? textH : max(1, (textH - max(0, text2gap)) / 2);
+
     if (im.empty()) {
         cerr << "Error: ImageMagick not found. Install it with:\n";
         cerr << "  macOS:   brew install imagemagick\n";
@@ -550,7 +580,7 @@ int main(int argc, char* argv[]) {
              << " -font \""       << font << "\""
              << " -gravity Center"
              << (lineSpacing != 0 ? " -interline-spacing " + to_string(lineSpacing) : "")
-             << " -size "         << textW << "x" << textH
+             << " -size "         << textW << "x" << textH_each
              << " caption:"       << quotedText
              << " -verbose info:";
         int autoFitSize = 0;
@@ -571,9 +601,9 @@ int main(int argc, char* argv[]) {
     }
 
     // Temp files for intermediate layers.
-    string tmpLayer   = outputFile + ".tmp_layer.png";
-    string tmpOutline = outputFile + ".tmp_outline.png";
-    string tmpShadow  = outputFile + ".tmp_shadow.png";
+    string tmpLayer    = outputFile + ".tmp_layer.png";
+    string tmpOutline  = outputFile + ".tmp_outline.png";
+    string tmpShadow   = outputFile + ".tmp_shadow.png";
 
     // ── Step 1: Render text to a trimmed PNG layer ─────────────────────────
     ostringstream cmd1;
@@ -583,9 +613,9 @@ int main(int argc, char* argv[]) {
          << " -font \""       << font << "\""
          << " -gravity Center"
          << (lineSpacing != 0 ? " -interline-spacing " + to_string(lineSpacing) : "")
-         << " -size "         << textW << "x" << textH
+         << " -size "         << textW << "x" << textH_each
          << (applyPointsize ? " -pointsize " + to_string(applyPointsizeN) : "")
-         << " caption:"      << quotedText
+         << " caption:"       << quotedText
          << " -trim"
          << " -bordercolor \"" << layerBg << "\""
          << " -border " << borderW << "x" << borderH
@@ -598,6 +628,66 @@ int main(int argc, char* argv[]) {
         cerr << "  magick -list font\n";
         cerr << "  textimage \"...\" --font=\"/path/to/font.ttf\"\n";
         return 1;
+    }
+
+    // ── Step 1b: Render second text and combine into one stacked layer ────
+    if (!text2.empty()) {
+        string tmpL2 = outputFile + ".tmp_layer2.png";
+        string tmpLC = outputFile + ".tmp_combined.png";
+        string quotedText2 = shellQuote(text2);
+
+        const string& t2color = text2color.empty() ? textColor : text2color;
+        const string& t2font  = text2font.empty()  ? font      : text2font;
+        ostringstream cmd1b;
+        cmd1b << im
+              << " -background \"" << layerBg << "\""
+              << " -fill \""       << t2color << "\""
+              << " -font \""       << t2font  << "\""
+              << " -gravity Center"
+              << (lineSpacing != 0 ? " -interline-spacing " + to_string(lineSpacing) : "")
+              << " -size "         << textW << "x" << textH_each
+              << (applyPointsize ? " -pointsize " + to_string(applyPointsizeN) : "")
+              << " caption:"       << quotedText2
+              << " -trim"
+              << " -bordercolor \"" << layerBg << "\""
+              << " -border " << borderW << "x" << borderH
+              << " \"" << tmpL2 << "\"";
+
+        if (runSystem(cmd1b.str()) == 0) {
+            // Query pixel dimensions of both text layers.
+            auto identDim = [&](const string& path, int& w, int& h) {
+                string cmd = im + " identify -format \"%wx%h\" \"" + path + "\"";
+                FILE* p = runPopen(cmd, "r");
+                if (p) { char buf[64] = {}; fgets(buf, sizeof(buf), p); pclose(p);
+                         sscanf(buf, "%dx%d", &w, &h); }
+            };
+            int W1 = 0, H1 = 0, W2 = 0, H2 = 0;
+            identDim(tmpLayer, W1, H1);
+            identDim(tmpL2,    W2, H2);
+
+            int combinedW = max(W1, W2);
+            int combinedH = H1 + text2gap + H2;
+            int x1 = (combinedW - W1) / 2;
+            int x2 = (combinedW - W2) / 2;
+
+            ostringstream cmd1c;
+            cmd1c << im
+                  << " -size " << combinedW << "x" << combinedH
+                  << " xc:\"" << layerBg << "\""
+                  << " \"" << tmpLayer << "\" -gravity NorthWest"
+                  << " -geometry +" << x1 << "+0 -composite"
+                  << " \"" << tmpL2 << "\" -gravity NorthWest"
+                  << " -geometry +" << x2 << "+" << (H1 + text2gap) << " -composite"
+                  << " \"" << tmpLC << "\"";
+
+            if (runSystem(cmd1c.str()) == 0) {
+                remove(tmpLayer.c_str());
+                remove(tmpL2.c_str());
+                tmpLayer = tmpLC;
+            } else {
+                remove(tmpL2.c_str());
+            }
+        }
     }
 
     // ── Optional outline step ─────────────────────────────────────────────

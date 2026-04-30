@@ -122,11 +122,15 @@ int main(int argc, char* argv[]) {
         char dateBuf[64];
         strftime(dateBuf, sizeof(dateBuf), "%x", &target);
         cout << dateBuf << "\n";
+        
         ifstream localBv("./bv");
-        const string bvCmd = localBv.good() ? "./bv --day --refonly" : "bv --day --refonly";
+        
+        // Dynamically append the specific day to the bv command
+        string baseBv = localBv.good() ? "./bv" : "bv";
+        string bvCmd = baseBv + " --day=" + to_string(day) + " --refonly";
+        
         return system(bvCmd.c_str());
     }
-
     if (!dayOnly) {
         if (queryTpl.empty()) {
             queryTpl = loadQueryFile();
