@@ -193,6 +193,12 @@ void printHelp() {
     cout << "  --text2gap=N            Pixel gap between the two text blocks (default: 40)\n";
     cout << "  --text2color=COLOR      Text color for the second block (default: same as --textcolor)\n";
     cout << "  --text2font=FONT        Font for the second block (default: same as --font)\n";
+    cout << "  --text2outline[=N]      Outline px for text2 (default: same as --textoutline)\n";
+    cout << "  --no-text2outline       No outline for text2\n";
+    cout << "  --text2outlinecolor=C   Outline color for text2 (default: same as --textoutlinecolor)\n";
+    cout << "  --text2shadow[=N]       Shadow intensity for text2 (default: same as --textshadow)\n";
+    cout << "  --no-text2shadow        No shadow for text2\n";
+    cout << "  --text2shadowmethod=N   Shadow method for text2 (default: same as --shadowmethod)\n";
     cout << "  --output=FILE           Output image file (default: derived from text)\n";
     cout << "  --width=N               Image width in pixels (default: 1920)\n";
     cout << "  --height=N              Image height in pixels (default: 1080)\n";
@@ -321,6 +327,10 @@ int main(int argc, char* argv[]) {
     int    text2gap   = stoi(cfgGet(cfg, "text2gap", "40"));
     string text2color = cfgGet(cfg, "text2color", "");   // empty = same as textcolor
     string text2font  = cfgGet(cfg, "text2font",  "");   // empty = same as font
+    int    text2Outline      = -1;   // -1 = inherit from textOutline
+    string text2OutlineColor = "";   // "" = inherit from textOutlineColor
+    int    text2Shadow       = -1;   // -1 = inherit from textShadow
+    int    text2ShadowMethod = -1;   // -1 = inherit from shadowMethod
 
     bool saveConfig  = false;
     bool showConfig  = false;
@@ -344,6 +354,22 @@ int main(int argc, char* argv[]) {
             text2color = arg.substr(13);
         } else if (arg.find("--text2font=") == 0) {
             text2font = arg.substr(12);
+        } else if (arg.find("--text2outline=") == 0) {
+            text2Outline = max(0, stoi(arg.substr(15)));
+        } else if (arg == "--text2outline") {
+            text2Outline = 2;
+        } else if (arg == "--no-text2outline") {
+            text2Outline = 0;
+        } else if (arg.find("--text2outlinecolor=") == 0) {
+            text2OutlineColor = arg.substr(20);
+        } else if (arg.find("--text2shadow=") == 0) {
+            text2Shadow = max(0, min(10, stoi(arg.substr(14))));
+        } else if (arg == "--text2shadow") {
+            text2Shadow = 5;
+        } else if (arg == "--no-text2shadow") {
+            text2Shadow = 0;
+        } else if (arg.find("--text2shadowmethod=") == 0) {
+            text2ShadowMethod = max(1, min(2, stoi(arg.substr(20))));
         } else if (arg.find("--output=") == 0) {
             outputFile = arg.substr(9);
         } else if (arg.find("--width=") == 0) {
@@ -460,6 +486,10 @@ int main(int argc, char* argv[]) {
         cout << "  text2gap         = " << text2gap << "\n";
         cout << "  text2color       = " << (text2color.empty() ? "(same as textcolor)" : text2color) << "\n";
         cout << "  text2font        = " << (text2font.empty()  ? "(same as font)"      : text2font)  << "\n";
+        cout << "  text2outline     = " << (text2Outline < 0 ? "(same as textoutline)" : (text2Outline > 0 ? to_string(text2Outline) : "no")) << "\n";
+        cout << "  text2outlinecolor= " << (text2OutlineColor.empty() ? "(same as textoutlinecolor)" : text2OutlineColor) << "\n";
+        cout << "  text2shadow      = " << (text2Shadow < 0 ? "(same as textshadow)" : (text2Shadow > 0 ? to_string(text2Shadow) : "no")) << "\n";
+        cout << "  text2shadowmethod= " << (text2ShadowMethod < 0 ? "(same as shadowmethod)" : to_string(text2ShadowMethod)) << "\n";
         ifstream check(CONFIG_FILE);
         if (check.good())
             cout << "\nConfig file: ./" << CONFIG_FILE << " (loaded)\n";
@@ -504,7 +534,11 @@ int main(int argc, char* argv[]) {
             "text2            = " + text2,
             "text2gap         = " + to_string(text2gap),
             "text2color       = " + text2color,
-            "text2font        = " + text2font
+            "text2font        = " + text2font,
+            "text2outline     = " + (text2Outline < 0 ? string("") : (text2Outline > 0 ? to_string(text2Outline) : string("0"))),
+            "text2outlinecolor= " + text2OutlineColor,
+            "text2shadow      = " + (text2Shadow < 0 ? string("") : (text2Shadow > 0 ? to_string(text2Shadow) : string("no"))),
+            "text2shadowmethod= " + (text2ShadowMethod < 0 ? string("") : to_string(text2ShadowMethod))
         };
         if (!writeSection(lines)) { cerr << "Error: could not write '" << CONFIG_FILE << "'.\n"; return 1; }
         cerr << "Saved [" << SECTION << "] to ./" << CONFIG_FILE << "\n";
@@ -604,8 +638,46 @@ int main(int argc, char* argv[]) {
     string tmpLayer    = outputFile + ".tmp_layer.png";
     string tmpOutline  = outputFile + ".tmp_outline.png";
     string tmpShadow   = outputFile + ".tmp_shadow.png";
+    string tmpOutline2 = outputFile + ".tmp_outline2.png";
+    string tmpShadow2  = outputFile + ".tmp_shadow2.png";
 
-    // ── Step 1: Render text to a trimmed PNG layer ─────────────────────────
+    // Effective text2 effect settings (inherit from text1 when not overridden)
+    int    eff2Outline      = (text2Outline >= 0)      ? text2Outline      : textOutline;
+    string eff2OutlineColor = text2OutlineColor.empty() ? textOutlineColor  : text2OutlineColor;
+    int    eff2Shadow       = (text2Shadow >= 0)        ? text2Shadow       : textShadow;
+    int    eff2ShadowMethod = (text2ShadowMethod >= 0)  ? text2ShadowMethod : shadowMethod;
+
+    // Apply outline to a layer file, replacing it on success (old file is deleted)
+    auto applyOutlineToLayer = [&](string& layer, int outline, const string& outColor,
+                                   const string& tmpOut) {
+        if (outline <= 0) return;
+        ostringstream cmd;
+        cmd << im << " \"" << layer << "\""
+            << " " << LP << " +clone -channel alpha"
+            << " -morphology Dilate disk:" << outline
+            << " +channel -fill \"" << outColor << "\" -colorize 100 " << RP
+            << " +swap -composite"
+            << " \"" << tmpOut << "\"";
+        if (runSystem(cmd.str()) == 0) { remove(layer.c_str()); layer = tmpOut; }
+    };
+
+    // Apply shadow to a layer file, replacing it on success (old file is deleted)
+    auto applyShadowToLayer = [&](string& layer, int shadow, int method,
+                                  const string& tmpOut) {
+        if (shadow <= 0) return;
+        double sigma   = (method == 1) ? shadow * 0.8 : 0.0;
+        int    offset  = max(1, (int)round(shadow * 0.6));
+        int    opacity = (method == 1) ? 80 : 100;
+        ostringstream cmd;
+        cmd << im << " \"" << layer << "\""
+            << " " << LP << " +clone -background black -shadow " << opacity << "x" << sigma
+            << "+" << offset << "+" << offset << " " << RP
+            << " +swap -background none -flatten"
+            << " \"" << tmpOut << "\"";
+        if (runSystem(cmd.str()) == 0) { remove(layer.c_str()); layer = tmpOut; }
+    };
+
+    // ── Step 1: Render text1 to a trimmed PNG layer ────────────────────────
     ostringstream cmd1;
     cmd1 << im
          << " -background \"" << layerBg << "\""
@@ -630,7 +702,21 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // ── Step 1b: Render second text and combine into one stacked layer ────
+    // Measure pre-effect height of text1 (shadow expands the canvas, so capture now)
+    int baseH1 = 0;
+    if (!text2.empty()) {
+        int _bw = 0;
+        string _bc = im + " identify -format \"%wx%h\" \"" + tmpLayer + "\"";
+        FILE* _bp = runPopen(_bc, "r");
+        if (_bp) { char buf[64] = {}; fgets(buf, sizeof(buf), _bp); pclose(_bp);
+                   sscanf(buf, "%dx%d", &_bw, &baseH1); }
+    }
+
+    // Apply text1 outline then shadow
+    applyOutlineToLayer(tmpLayer, textOutline, textOutlineColor, tmpOutline);
+    applyShadowToLayer(tmpLayer, textShadow, shadowMethod, tmpShadow);
+
+    // ── Step 1b: Render text2, apply its effects, combine ─────────────────
     if (!text2.empty()) {
         string tmpL2 = outputFile + ".tmp_layer2.png";
         string tmpLC = outputFile + ".tmp_combined.png";
@@ -654,7 +740,11 @@ int main(int argc, char* argv[]) {
               << " \"" << tmpL2 << "\"";
 
         if (runSystem(cmd1b.str()) == 0) {
-            // Query pixel dimensions of both text layers.
+            // Apply text2 outline then shadow
+            applyOutlineToLayer(tmpL2, eff2Outline, eff2OutlineColor, tmpOutline2);
+            applyShadowToLayer(tmpL2, eff2Shadow, eff2ShadowMethod, tmpShadow2);
+
+            // Query pixel dimensions of both processed layers
             auto identDim = [&](const string& path, int& w, int& h) {
                 string cmd = im + " identify -format \"%wx%h\" \"" + path + "\"";
                 FILE* p = runPopen(cmd, "r");
@@ -666,7 +756,9 @@ int main(int argc, char* argv[]) {
             identDim(tmpL2,    W2, H2);
 
             int combinedW = max(W1, W2);
-            int combinedH = H1 + text2gap + H2;
+            // Use pre-effect height for gap so shadow expansion doesn't widen it
+            int y2        = max(0, baseH1 - 2 * borderH + text2gap);
+            int combinedH = max(H1, y2 + H2);  // H1 may be larger due to shadow
             int x1 = (combinedW - W1) / 2;
             int x2 = (combinedW - W2) / 2;
 
@@ -677,7 +769,7 @@ int main(int argc, char* argv[]) {
                   << " \"" << tmpLayer << "\" -gravity NorthWest"
                   << " -geometry +" << x1 << "+0 -composite"
                   << " \"" << tmpL2 << "\" -gravity NorthWest"
-                  << " -geometry +" << x2 << "+" << (H1 + text2gap) << " -composite"
+                  << " -geometry +" << x2 << "+" << y2 << " -composite"
                   << " \"" << tmpLC << "\"";
 
             if (runSystem(cmd1c.str()) == 0) {
@@ -690,34 +782,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // ── Optional outline step ─────────────────────────────────────────────
     string activeLayer = tmpLayer;
-    if (textOutline > 0) {
-        ostringstream outlineCmd;
-        outlineCmd << im << " \"" << activeLayer << "\""
-                   << " " << LP << " +clone -channel alpha"
-                   << " -morphology Dilate disk:" << textOutline
-                   << " +channel -fill \"" << textOutlineColor << "\" -colorize 100 " << RP
-                   << " +swap -composite"
-                   << " \"" << tmpOutline << "\"";
-        if (runSystem(outlineCmd.str()) == 0)
-            activeLayer = tmpOutline;
-    }
-
-    // ── Optional shadow step ──────────────────────────────────────────────
-    if (textShadow > 0) {
-        double sigma   = (shadowMethod == 1) ? textShadow * 0.8 : 0.0;
-        int    offset  = max(1, (int)round(textShadow * 0.6));
-        int    opacity = (shadowMethod == 1) ? 80 : 100;
-        ostringstream shadowCmd;
-        shadowCmd << im << " \"" << activeLayer << "\""
-                  << " " << LP << " +clone -background black -shadow " << opacity << "x" << sigma
-                  << "+" << offset << "+" << offset << " " << RP
-                  << " +swap -background none -flatten"
-                  << " \"" << tmpShadow << "\"";
-        if (runSystem(shadowCmd.str()) == 0)
-            activeLayer = tmpShadow;
-    }
 
     // ── Query layer dimensions (for panel) ────────────────────────────────
     int layerW = 0, layerH = 0;
@@ -786,8 +851,6 @@ int main(int argc, char* argv[]) {
     int ret2 = runSystem(cmd2.str());
 
     remove(tmpLayer.c_str());
-    if (textOutline > 0) remove(tmpOutline.c_str());
-    if (textShadow > 0) remove(tmpShadow.c_str());
 
     if (ret2 != 0) {
         cerr << "Error: image generation failed.\n\n";

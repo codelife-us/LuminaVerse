@@ -447,8 +447,7 @@ class TextImageView:
         self.textshadow_var.trace_add("write", lambda *_: self._schedule(400))
         tk.Label(f, text="Method:").grid(row=14, column=2, sticky="e", **pad)
         _SM_OPTS = ["1 – Soft (Gaussian)", "2 – Hard (copy)"]
-        self._sm_cb = ttk.Combobox(f, textvariable=self.shadowmethod_var, values=_SM_OPTS,
-                                   state="readonly", width=17)
+        self._sm_cb = ttk.Combobox(f, values=_SM_OPTS, state="readonly", width=17)
         try:
             self._sm_cb.current(int(self.shadowmethod_var.get()) - 1)
         except (ValueError, IndexError):
@@ -512,8 +511,7 @@ class TextImageView:
         self.text2shadow_var.trace_add("write", lambda *_: self._schedule(400))
         tk.Label(f, text="T2 method:").grid(row=19, column=2, sticky="e", **pad)
         _T2SM_OPTS = ["1 – Soft (Gaussian)", "2 – Hard (copy)"]
-        self._t2sm_cb = ttk.Combobox(f, textvariable=self.text2shadowmethod_var,
-                                     values=_T2SM_OPTS, state="readonly", width=17)
+        self._t2sm_cb = ttk.Combobox(f, values=_T2SM_OPTS, state="readonly", width=17)
         try:
             idx = int(self.text2shadowmethod_var.get() or "1") - 1
             self._t2sm_cb.current(max(0, min(1, idx)))
