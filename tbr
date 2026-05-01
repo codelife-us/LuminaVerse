@@ -1,0 +1,3 @@
+#!/bin/sh
+bv -d -g && day -y
+# this loads your daily Bible reading and Youtube to daily video
