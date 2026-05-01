@@ -33,19 +33,22 @@ Show version:
 ./bv --version
 ```
 
-Look up a single verse:
+Look up a single verse (positional or named):
 ```bash
+./bv "John 3:16"
 ./bv --ref="John 3:16"
 ```
 
 Look up multiple verses (comma-separated):
 ```bash
+./bv "John 3:16,Romans 5:8"
 ./bv --ref="John 3:16,Romans 5:8"
 ./bv --ref="Romans 3:23,Romans 6:23,Romans 10:9-10"
 ```
 
 Specify a Bible version:
 ```bash
+./bv "John 3:16" -bv=BSB
 ./bv -bv=BSB --ref="John 3:16"
 ./bv --bibleversion=WEB --ref="Romans 8:1"
 ```
@@ -118,7 +121,7 @@ Open the reference on biblegateway.com in the browser (no prompt, verse output s
 ./bv --ref="John 3:16" --opengw
 ```
 
-> Note: Bible Gateway does not carry BSB, so `-bv=BSB` is treated as WEB when using `--opengw`.
+> Note: Bible Gateway does not carry BSB, so `-bv=BSB` is treated as WEB when using `--opengw`. Any other Bible Gateway version code (e.g. `NLT`, `ESV`, `NASB`) is passed through as-is, even if unsupported by `bv` locally.
 
 ## Daily Reading Plans
 
