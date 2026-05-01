@@ -327,7 +327,7 @@ class BviView:
 
         self._build_controls()
         self._build_preview()
-        self._position_windows()
+        self.root.after(100, self._position_windows)
         self._load_index(self.version_var.get())
         # Apply default theme (if any) — overrides .bvi values; also triggers render
         default_name = self._bvilive_state.get("default_theme", "")
@@ -923,6 +923,7 @@ class BviView:
 
     def _position_windows(self):
         self.root.update_idletasks()
+        self.win.update_idletasks()
         cw = self.root.winfo_reqwidth()
         self.root.geometry(f"+80+200")
         self.win.geometry(f"{PREVIEW_W}x{PREVIEW_H}+{80 + cw + 16}+200")
