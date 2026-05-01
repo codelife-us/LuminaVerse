@@ -25,7 +25,7 @@ Config file: `.luminaverse` `[gospelshare]` | Full docs: [gospelshare.md](gospel
 
 ### [bv](bv.md)
 
-Lightweight Bible verse lookup. Look up any reference, verse range, or full chapter and print it to stdout. Also supports daily reading plans and opening references on ESV.org.
+Lightweight Bible verse lookup. Look up any reference, verse range, or full chapter and print it to stdout. Also supports daily reading plans and opening references on ESV.org or Bible Gateway via your browser.
 
 ```bash
 ./bv --ref="John 3:16"
