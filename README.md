@@ -2,7 +2,7 @@
 
 A collection of tools for reading, sharing, and visualizing Scripture.
 
-All tools share the same three Bible translation files (`BibleKJV.txt`, `BibleBSB.txt`, `BibleWEB.txt`) and look for them first in the current directory, then in `$HOME`. Any tool will prompt to download a missing file automatically via `curl`.
+All tools share the same three Bible translation files (`BibleKJV.txt`, `BibleBSB.txt`, `BibleWEB.txt`) and look for them first in the current directory, then in `$HOME` on macOS/Linux (`%USERPROFILE%` on Windows). Any tool will prompt to download a missing file automatically via `curl`.
 
 ---
 
@@ -125,8 +125,7 @@ Prints the current day of the year and opens a YouTube search for today's video 
 Update the .day file for your own custom daily query string.
 
 ```bash
-./day                # open YouTube search for today's video
-./day -d             # print today's day of the year number only
+./day -d             # print today's day of the year number only, same with no options
 ./day && ./bv -d     # open YouTube search and print today's reading plan
 ./day -h             # show help for the day command line program
 ```
@@ -145,7 +144,7 @@ All tools use the same translation files:
 | BSB | `BibleBSB.txt` | bereanbible.com |
 | WEB | `BibleWEB.txt` | openbible.com |
 
-Files are looked up in the current directory first, then `$HOME`. Any tool will prompt to download a missing file automatically using `curl`.
+Files are looked up in the current directory first, then `$HOME` on macOS/Linux (`%USERPROFILE%` on Windows). Any tool will prompt to download a missing file automatically using `curl`.
 
 ---
 

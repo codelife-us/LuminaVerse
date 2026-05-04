@@ -60,7 +60,7 @@ g++ -std=c++11 -o biblereader biblereader.cpp
 
 ## Version Switching
 
-If multiple Bible files are available (in the current directory or `$HOME`), version selector buttons appear in the top-right of the header. Clicking a version loads it in the background without restarting; subsequent switches use a cache so each file is fetched only once per session.
+If multiple Bible files are available (in the current directory or `$HOME` on macOS/Linux, `%USERPROFILE%` on Windows), version selector buttons appear in the top-right of the header. Clicking a version loads it in the background without restarting; subsequent switches use a cache so each file is fetched only once per session.
 
 ## Composing with bvi
 
@@ -85,7 +85,7 @@ To copy verse text and use it as image text:
 - **WEB**: World English Bible — `BibleWEB.txt` (downloaded from https://openbible.com/textfiles/web.txt)
 
 If a Bible file is not found, the program will prompt you to download it automatically using `curl`.
-Bible files are looked up in the current directory first, then `$HOME`.
+Bible files are looked up in the current directory first, then `$HOME` on macOS/Linux (`%USERPROFILE%` on Windows).
 
 ## Files
 

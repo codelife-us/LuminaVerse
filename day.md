@@ -35,14 +35,14 @@ g++ -std=c++11 -o day day.cpp
 
 ## Config file (.day)
 
-Create a `.day` file in the current directory or `$HOME` to set a default YouTube search query. The first non-blank, non-comment line is used. Lines starting with `#` are ignored.
+Create a `.day` file in the current directory or `$HOME` (macOS/Linux) / `%USERPROFILE%` (Windows) to set a default YouTube search query. The first non-blank, non-comment line is used. Lines starting with `#` are ignored.
 
 ```
 # .day — default YouTube search query for day
 Day {day} The Bible Recap
 ```
 
-Query priority: `-q=` flag → `.day` in current dir → `.day` in `$HOME` → built-in default (`Day {day} The Bible Recap`).
+Query priority: `-q=` flag → `.day` in current dir → `.day` in `$HOME` / `%USERPROFILE%` → built-in default (`Day {day} The Bible Recap`).
 
 ## Examples
 
