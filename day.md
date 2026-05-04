@@ -11,8 +11,8 @@ g++ -std=c++11 -o day day.cpp
 ## Usage
 
 ```bash
-./day                  # print day number of today
-./day -r               # print Bible reference only
+./day                  # print day number of today only, same as day -d
+./day -r               # print Bible reference for today only
 ./day -p               # print day number of today, date, and Bible reference
 ./day -y               # print day number and open YouTube search
 ./day -d=4/30/2026 -r  # print Bible reference only for a specific date
