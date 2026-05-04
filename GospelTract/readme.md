@@ -9,3 +9,5 @@ Bogard Press has many gospel tracts to choose from:
 https://bogardpress.org/product-category/church-supplies/church-supplies-tracts/
 
 
+See gospelshare.cpp here for various ways to get text, Markdown, pdf, or epub versions of some gospel tracts.
+
