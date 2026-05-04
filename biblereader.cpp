@@ -14,6 +14,7 @@
 #include <set>
 #include <algorithm>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <cctype>
 #include <csignal>
@@ -636,21 +637,42 @@ int main(int argc, char* argv[]) {
     string version   = "KJV";
     int    port      = 7778;
     bool   copyVerse = false;
+    bool   csvMode   = false;
+    bool   tabMode   = false;
+    string planArg;
+    string startArg;
 
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];
-        if      (arg.find("-bv=") == 0)            version = arg.substr(4);
-        else if (arg.find("--bibleversion=") == 0) version = arg.substr(15);
-        else if (arg.find("--port=") == 0)         port    = stoi(arg.substr(7));
+        if      (arg.find("-bv=") == 0)            version  = arg.substr(4);
+        else if (arg.find("--bibleversion=") == 0) version  = arg.substr(15);
+        else if (arg.find("--port=") == 0)         port     = stoi(arg.substr(7));
+        else if (arg.find("--plan=") == 0)         planArg  = arg.substr(7);
+        else if (arg.find("--start=") == 0)        startArg = arg.substr(8);
         else if (arg == "--verse" || arg == "-v")  copyVerse = true;
+        else if (arg == "--csv"   || arg == "-c")  csvMode   = true;
+        else if (arg == "--tab"   || arg == "-t")  tabMode   = true;
         else if (arg == "-h" || arg == "--help") {
-            cout << "Usage: biblereader [-bv=KJV|BSB|WEB] [--port=7778] [--verse|-v]\n"
+            cout << "Usage: biblereader [-bv=KJV|BSB|WEB] [--port=7778] [--verse|-v] [--csv|-c] [--tab|-t] [--plan=NAME] [--start=DATE]\n"
                  << "  Opens a browser Bible reader.\n"
                  << "  Click a verse to copy its reference to the clipboard.\n"
-                 << "  --verse, -v   Copy verse text instead of reference\n"
+                 << "  --verse,        -v   Copy verse text instead of reference\n"
+                 << "  --csv,          -c   Print all days of the year as CSV (day,date,\"reference\")\n"
+                 << "  --tab,          -t   Print all days of the year as TSV (day<TAB>date<TAB>reference)\n"
+                 << "  --plan=NAME          Reading plan: Chronological (default), Sequential, OTNT\n"
+                 << "  --start=DATE         Day 1 of the plan: mm/dd/yyyy, today, or day number\n"
                  << "  Press Enter here to quit; the last selection is printed to stdout.\n";
             return 0;
         }
+    }
+
+    if (csvMode || tabMode) {
+        ifstream localBv("./bv");
+        string baseBv = localBv.good() ? "./bv" : "bv";
+        string cmd = baseBv + (csvMode ? " --alldays --csv" : " --alldays --tab");
+        if (!planArg.empty())  cmd += " --plan="  + planArg;
+        if (!startArg.empty()) cmd += " --start=" + startArg;
+        return system(cmd.c_str());
     }
 
     transform(version.begin(), version.end(), version.begin(), ::toupper);

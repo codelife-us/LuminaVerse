@@ -12,7 +12,28 @@
 #include <ctime>
 #include <cstdlib>
 #include <clocale>
+#include <cstdio>
 using namespace std;
+
+static string captureCommand(const string& cmd) {
+#ifdef _WIN32
+    FILE* pipe = _popen(cmd.c_str(), "r");
+#else
+    FILE* pipe = popen(cmd.c_str(), "r");
+#endif
+    if (!pipe) return "";
+    string result;
+    char buf[256];
+    while (fgets(buf, sizeof(buf), pipe)) result += buf;
+#ifdef _WIN32
+    _pclose(pipe);
+#else
+    pclose(pipe);
+#endif
+    while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
+        result.pop_back();
+    return result;
+}
 
 static int dayOfYear() {
     time_t t = time(nullptr);
@@ -79,6 +100,8 @@ int main(int argc, char* argv[]) {
     bool   openYoutube = false;
     bool   planMode    = false;
     bool   refOnly     = false;
+    bool   csvMode     = false;
+    bool   tabMode     = false;
     int    dayOverride = -1;   // -1 = use current day
     string queryTpl;           // empty = load from .day file or use built-in default
 
@@ -89,7 +112,7 @@ int main(int argc, char* argv[]) {
             return 0;
         } else if (arg == "-h" || arg == "--help") {
             cout << "day — print the current day of the year (Jan 1 = 1)\n\n"
-                 << "Usage: day [-d[=N]|--day[=N]] [-y|--youtube] [-q=TEXT|--query=TEXT] [-p|--plan] [-r|--refonly]\n\n"
+                 << "Usage: day [-d[=N]|--day[=N]] [-y|--youtube] [-q=TEXT|--query=TEXT] [-p|--plan] [-r|--refonly] [-c|--csv] [-t|--tab]\n\n"
                  << "  (default)              Print day number only\n"
                  << "  -d=N, --day=N          Use day N instead of today\n"
                  << "  -d=mm/dd/yyyy          Use date instead of day number (4-digit or 2-digit year)\n"
@@ -97,6 +120,8 @@ int main(int argc, char* argv[]) {
                  << "  -q=TEXT, --query=TEXT  Override search query ({day} = day number); implies -y\n"
                  << "  -p, --plan             Print day number, date, and Bible reference\n"
                  << "  -r, --refonly          Print Bible reference only\n"
+                 << "  -c, --csv              Output as CSV: day,date,\"reference\"\n"
+                 << "  -t, --tab              Output as TSV: day<TAB>date<TAB>reference\n"
                  << "  -v, --version          Print version\n"
                  << "  -h, --help             Show this help\n\n"
                  << "Config file (.day in current dir or $HOME):\n"
@@ -129,6 +154,10 @@ int main(int argc, char* argv[]) {
             planMode = true;
         } else if (arg == "-r" || arg == "--refonly") {
             refOnly = true;
+        } else if (arg == "-c" || arg == "--csv") {
+            csvMode = true;
+        } else if (arg == "-t" || arg == "--tab") {
+            tabMode = true;
         }
     }
 
@@ -140,9 +169,9 @@ int main(int argc, char* argv[]) {
         return system((baseBv + " --day=" + to_string(day) + " --refonly").c_str());
     }
 
-    cout << day << "\n";
+    if (!csvMode && !tabMode) cout << day << "\n";
 
-    if (planMode) {
+    if (planMode || csvMode || tabMode) {
         setlocale(LC_TIME, "");
         time_t now = time(nullptr);
         struct tm target = *localtime(&now);
@@ -153,13 +182,22 @@ int main(int argc, char* argv[]) {
         target.tm_sec  = 0;
         mktime(&target);
         char dateBuf[64];
-        strftime(dateBuf, sizeof(dateBuf), "%x", &target);
-        cout << dateBuf << "\n";
-        cout.flush();
+        strftime(dateBuf, sizeof(dateBuf), "%m/%d/%Y", &target);
 
         ifstream localBv("./bv");
         string baseBv = localBv.good() ? "./bv" : "bv";
-        return system((baseBv + " --day=" + to_string(day) + " --refonly").c_str());
+
+        if (csvMode || tabMode) {
+            string ref = captureCommand(baseBv + " --day=" + to_string(day) + " --refonly");
+            if (csvMode)
+                cout << day << "," << dateBuf << ",\"" << ref << "\"\n";
+            else
+                cout << day << "\t" << dateBuf << "\t" << ref << "\n";
+        } else {
+            cout << dateBuf << "\n";
+            cout.flush();
+            system((baseBv + " --day=" + to_string(day) + " --refonly").c_str());
+        }
     }
     if (openYoutube) {
         if (queryTpl.empty()) {

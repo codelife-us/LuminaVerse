@@ -11,6 +11,8 @@ A C++ program that opens a full Bible reader in your browser. Click any verse to
 - Click a verse to copy its reference to the clipboard
 - Live Bible version switching (KJV ↔ BSB ↔ WEB) while running — no restart needed
 - `--verse` mode copies verse text instead of reference
+- `--csv` mode prints all 365/366 days of the current year as a CSV file
+- `--tab` mode prints all 365/366 days of the current year as a tab-delimited file
 - Last selected reference printed to stdout on exit, for piping to other tools
 
 ## Building
@@ -27,6 +29,12 @@ g++ -std=c++11 -o biblereader biblereader.cpp
 ./biblereader --bibleversion=WEB
 ./biblereader --verse          # copy verse text instead of reference
 ./biblereader --port=8080      # use a different port (default 7778)
+./biblereader --csv            # output all days of the year as CSV
+./biblereader --csv > plan.csv # save to file
+./biblereader --tab                       # output all days of the year as TSV
+./biblereader --tab > plan.tsv            # save to file
+./biblereader --csv --start=5/5/2026      # CSV starting May 5 as day 1
+./biblereader --csv --start=today         # CSV starting today as day 1
 ```
 
 ## Options
@@ -36,6 +44,10 @@ g++ -std=c++11 -o biblereader biblereader.cpp
 | `-bv=VERSION` | Starting Bible version: `KJV` (default), `BSB`, `WEB` |
 | `--bibleversion=VERSION` | Same as `-bv=` |
 | `--verse`, `-v` | Copy verse text to clipboard instead of reference |
+| `--csv`, `-c` | Print all days of the year as CSV: `day,date,"reference"` |
+| `--tab`, `-t` | Print all days of the year as TSV: `day<TAB>date<TAB>reference` |
+| `--plan=NAME` | Reading plan for `--csv`/`--tab`: `Chronological` (default), `Sequential`, `OTNT` |
+| `--start=DATE` | Day 1 of the plan: `mm/dd/yyyy`, `today`, or day number; shifts all dates in `--csv`/`--tab` output |
 | `--port=N` | HTTP port for local server (default `7778`) |
 | `-h`, `--help` | Show help |
 

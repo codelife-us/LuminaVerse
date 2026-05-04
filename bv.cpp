@@ -1163,10 +1163,20 @@ static const char* const PLAN_SEQUENTIAL[365] = {
 map<string, string> loadConfig() {
     map<string, string> cfg;
     ifstream f(CONFIG_FILE);
-    if (!f.good()) return cfg;
+    ifstream fHome;
+    string homePath;
+    if (!f.good()) {
+        const char* home = getenv(HOME_ENV);
+        if (home) {
+            homePath = string(home) + "/" + CONFIG_FILE;
+            fHome.open(homePath);
+        }
+    }
+    ifstream& src = f.good() ? f : fHome;
+    if (!src.good()) return cfg;
     string line;
     bool inSection = false;
-    while (getline(f, line)) {
+    while (getline(src, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         size_t s = line.find_first_not_of(" \t");
         if (s == string::npos) continue;
@@ -1600,6 +1610,27 @@ static bool writeSection(const vector<string>& lines) {
     return true;
 }
 
+// Parse --start= value: "today", integer day-of-year, or mm/dd/yyyy.
+// Returns (time_t)-1 on parse failure.
+static time_t parseStartArg(const string& s) {
+    if (s == "today") return time(nullptr);
+    if (!s.empty() && s.find_first_not_of("0123456789") == string::npos) {
+        int d = stoi(s);
+        time_t now = time(nullptr);
+        struct tm t = *localtime(&now);
+        t.tm_mon = 0; t.tm_mday = d; t.tm_hour = 12; t.tm_min = 0; t.tm_sec = 0;
+        return mktime(&t);
+    }
+    int mm = 0, dd = 0, yyyy = 0;
+    if (sscanf(s.c_str(), "%d/%d/%d", &mm, &dd, &yyyy) == 3) {
+        if (yyyy < 100) yyyy += 2000;
+        struct tm t = {};
+        t.tm_year = yyyy - 1900; t.tm_mon = mm - 1; t.tm_mday = dd; t.tm_hour = 12;
+        return mktime(&t);
+    }
+    return (time_t)-1;
+}
+
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
@@ -1612,10 +1643,13 @@ int main(int argc, char* argv[]) {
     bool verseQuotes = cfgGet(cfg, "versequotes", "0") == "1";
     string planArg0 = cfgGet(cfg, "plan", "chronological");
     transform(planArg0.begin(), planArg0.end(), planArg0.begin(), ::tolower);
+    string startArg0 = cfgGet(cfg, "start", "");
 
     string refArg;
     string planArg    = planArg0;
+    string startArg   = startArg0;
     int  dayArg       = 0;
+    bool dayToday     = false;
     bool verseNumbers  = false;
     bool verseNewline  = false;
     bool italic        = false;
@@ -1625,6 +1659,9 @@ int main(int argc, char* argv[]) {
     bool refOnly       = false;
     bool openEsv       = false;
     bool openGw        = false;
+    bool allDays       = false;
+    bool csvOut        = false;
+    bool tabOut        = false;
 
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];
@@ -1663,10 +1700,16 @@ int main(int argc, char* argv[]) {
             transform(planArg.begin(), planArg.end(), planArg.begin(), ::tolower);
         } else if (arg == "--refonly") {
             refOnly = true;
+        } else if (arg == "--alldays") {
+            allDays = true;
+        } else if (arg == "--csv") {
+            csvOut = true;
+        } else if (arg == "--tab") {
+            tabOut = true;
+        } else if (arg.find("--start=") == 0) {
+            startArg = arg.substr(8);
         } else if (arg == "--day" || arg == "-d") {
-            time_t t = time(nullptr);
-            struct tm* lt = localtime(&t);
-            dayArg = lt->tm_yday + 1;
+            dayToday = true;
         } else if (arg.find("--day=") == 0 || arg.find("-d=") == 0) {
             dayArg = stoi(arg.substr(arg.find('=') + 1));
         } else if (refArg.empty() && arg[0] != '-') {
@@ -1678,12 +1721,28 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // Resolve --day / -d (no explicit N) now that --start= is known
+    if (dayToday) {
+        if (!startArg.empty()) {
+            time_t st = parseStartArg(startArg);
+            if (st != (time_t)-1) {
+                time_t now = time(nullptr);
+                dayArg = (int)(difftime(now, st) / 86400.0) + 1;
+            }
+        }
+        if (dayArg == 0) {
+            time_t t = time(nullptr);
+            dayArg = localtime(&t)->tm_yday + 1;
+        }
+    }
+
     if (showConfig) {
         cout << "Effective settings:" << endl;
         cout << "  bv          = " << version              << endl;
         cout << "  refstyle    = " << refStyle             << endl;
         cout << "  versequotes = " << (verseQuotes ? 1 : 0) << endl;
         cout << "  plan        = " << planArg              << endl;
+        cout << "  start       = " << (startArg.empty() ? "(not set)" : startArg) << endl;
         ifstream check(CONFIG_FILE);
         cout << "\nConfig file: ./" << CONFIG_FILE
              << (check.good() ? " (loaded)" : " (not found -- using defaults)") << endl;
@@ -1702,12 +1761,60 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    if (refArg.empty() && dayArg == 0) {
+    if (refArg.empty() && dayArg == 0 && !allDays) {
         cerr << "Usage: bv REF [OPTIONS]" << endl;
         cerr << "       bv --ref=REF [OPTIONS]" << endl;
         cerr << "       bv --day[=N]  [OPTIONS]" << endl;
+        cerr << "       bv --alldays [--csv|--tab] [--plan=NAME]" << endl;
         cerr << "Run 'bv --help' for usage." << endl;
         return 1;
+    }
+
+    if (allDays) {
+        const char* const* plan = PLAN_CHRONOLOGICAL;
+        if (planArg == "sequential" || planArg == "canonical" || planArg == "straight through")
+            plan = PLAN_SEQUENTIAL;
+        else if (planArg == "old and new testament" || planArg == "otnt" || planArg == "ot and nt")
+            plan = PLAN_OTNT;
+
+        if (csvOut)      cout << "day,date,reference\n";
+        else if (tabOut) cout << "day\tdate\treference\n";
+
+        // Determine base date: start arg if given, else Jan 1 of current year
+        time_t now = time(nullptr);
+        struct tm yearBase = *localtime(&now);
+        struct tm startBase = {};
+        bool hasStart = false;
+        if (!startArg.empty()) {
+            time_t st = parseStartArg(startArg);
+            if (st != (time_t)-1) { startBase = *localtime(&st); hasStart = true; }
+        }
+
+        for (int d = 1; d <= 365; ++d) {
+            struct tm t;
+            if (hasStart) {
+                t = startBase;
+                t.tm_mday += (d - 1);
+            } else {
+                t = yearBase;
+                t.tm_mon  = 0;
+                t.tm_mday = d;
+                t.tm_hour = 12;
+                t.tm_min  = 0;
+                t.tm_sec  = 0;
+            }
+            mktime(&t);
+            char dateBuf[32];
+            strftime(dateBuf, sizeof(dateBuf), "%m/%d/%Y", &t);
+            const char* ref = plan[d - 1];
+            if (csvOut)
+                cout << d << "," << dateBuf << ",\"" << ref << "\"\n";
+            else if (tabOut)
+                cout << d << "\t" << dateBuf << "\t" << ref << "\n";
+            else
+                cout << ref << "\n";
+        }
+        return 0;
     }
 
     if (dayArg < 0 || dayArg > 365) {

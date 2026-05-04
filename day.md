@@ -11,11 +11,11 @@ g++ -std=c++11 -o day day.cpp
 ## Usage
 
 ```bash
-./day                  # print day number
+./day                  # print day number of today
 ./day -r               # print Bible reference only
-./day -p               # print day number, date, and Bible reference
+./day -p               # print day number of today, date, and Bible reference
 ./day -y               # print day number and open YouTube search
-./day -d=4/30/2026 -r  # reference for a specific date
+./day -d=4/30/2026 -r  # print Bible reference only for a specific date
 ```
 
 ## Options
@@ -28,6 +28,9 @@ g++ -std=c++11 -o day day.cpp
 | `-q=TEXT`, `--query=TEXT` | Override the YouTube search query (`{day}` = day number); implies `-y` |
 | `-r`, `--refonly` | Print Bible reference only |
 | `-p`, `--plan` | Print day number, date, and Bible reference |
+| `-c`, `--csv` | Output as CSV: `day,date,"reference"` |
+| `-t`, `--tab` | Output as TSV: `day<TAB>date<TAB>reference` |
+| `-v`, `--version` | Print version |
 | `-h`, `--help` | Show help |
 
 ## Config file (.day)
@@ -75,6 +78,18 @@ Print today's Bible reference only:
 Print today's reading plan (day number, date, reference):
 ```bash
 ./day -p
+```
+
+Output today as a CSV row:
+```bash
+./day --csv
+./day -d=203 --csv
+```
+
+Output today as a tab-delimited row:
+```bash
+./day --tab
+./day -d=203 --tab
 ```
 
 ## Composing with other tools
