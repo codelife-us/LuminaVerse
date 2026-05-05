@@ -905,6 +905,11 @@ int main(int argc, char* argv[]) {
         applyPointsizeN = textSizePt;
     }
 
+    // When a fixed pointsize is applied, use a tall canvas so caption: renders all
+    // the text instead of clipping it to verseH. The actual layer is trimmed after,
+    // and clamping below keeps the result within the canvas.
+    int captionH = applyPointsize ? max(verseH, imgHeight * 4) : verseH;
+
     ostringstream cmd1;
     cmd1 << im
          << " -background \"" << layerBg << "\""
@@ -912,7 +917,7 @@ int main(int argc, char* argv[]) {
          << " -font \""       << font << "\""
          << " -gravity Center"                        // center-align each text line
          << (lineSpacing != 0 ? " -interline-spacing " + to_string(lineSpacing) : "")
-         << " -size "         << verseW << "x" << verseH
+         << " -size "         << verseW << "x" << captionH
          << (applyPointsize ? " -pointsize " + to_string(applyPointsizeN) : "")
          << " caption:"      << quotedVerse
          << " -trim"                                  // crop to actual text bounds
@@ -960,9 +965,9 @@ int main(int argc, char* argv[]) {
             activeLayer = tmpShadow;
     }
 
-    // ── Query layer dimensions (panel and/or citation-below placement) ────
+    // ── Query layer dimensions ────────────────────────────────────────────
     int layerW = 0, layerH = 0;
-    if (textPanelOpacity > 0 || (citeStyle != "none" && citePlacement == "below")) {
+    {
         string identCmd = im + " identify -format \"%wx%h\" \"" + tmpLayer + "\"";
         FILE* pipe = runPopen(identCmd, "r");
         if (pipe) {
@@ -970,6 +975,18 @@ int main(int argc, char* argv[]) {
             fgets(buf, sizeof(buf), pipe);
             pclose(pipe);
             sscanf(buf, "%dx%d", &layerW, &layerH);
+        }
+    }
+
+    // Clamp verseOffY so the text layer stays within the canvas bounds.
+    if (layerH > 0) {
+        int halfH = layerH / 2;
+        if (layerH >= imgHeight) {
+            // Layer taller than canvas: anchor its top to the canvas top so the
+            // beginning of the verse is visible (overflow falls off the bottom).
+            verseOffY = imgHeight / 2 - halfH;
+        } else {
+            verseOffY = max(halfH - imgHeight / 2, min(imgHeight / 2 - halfH, verseOffY));
         }
     }
 
