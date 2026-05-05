@@ -561,6 +561,12 @@ int main(int argc, char* argv[]) {
         }
     }
 
+#ifdef _WIN32
+    // ImageMagick font lookup treats '\' as escape sequences; normalize to '/'.
+    for (char& c : font)     if (c == '\\') c = '/';
+    for (char& c : citeFont) if (c == '\\') c = '/';
+#endif
+
     if ((textSizePt > 0 || maxTextSizePt > 0) && textScalePct != 100) {
         cerr << "Error: --textsize/--maxtextsize and --textscale cannot be used together.\n";
         return 1;

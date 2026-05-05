@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """bvilive — two-window live preview for bvi"""
 
+import io
 import tkinter as tk
 from tkinter import ttk, colorchooser, filedialog, simpledialog, messagebox
 import subprocess
@@ -203,18 +204,33 @@ def save_bvilive_state(path: str, state: dict):
             fh.writelines(after)
 
 
-def load_verse_index(bible_dir: Path, filename: str) -> dict:
-    """Return {book: {chapter: max_verse}} from a Bible text file."""
+def _find_bible_path(bible_dir: Path, filename: str) -> "Path | None":
+    """Mirrors bvi.cpp's Bible-file search: local dir → Bible/ subdir → USERPROFILE/HOME."""
+    candidates = [
+        bible_dir / filename,
+        bible_dir / "Bible" / filename,
+        Path.home() / filename,
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return None
+
+
+def load_verse_index(bible_dir: Path, filename: str) -> "tuple[dict, dict]":
+    """Return ({book: {chapter: max_verse}}, {ref: text}) from a Bible text file in one pass."""
     index: dict = {}
-    path = bible_dir / filename
-    if not path.exists():
-        return index
+    verses: dict = {}
+    path = _find_bible_path(bible_dir, filename)
+    if path is None:
+        return index, verses
     with open(path, encoding="utf-8-sig") as fh:
         for line in fh:
-            line = line.rstrip("\n")
+            line = line.rstrip("\n\r")
             if "\t" not in line:
                 continue
-            ref = line.split("\t")[0]
+            ref, text = line.split("\t", 1)
+            verses[ref] = text
             m = re.match(r'^(.+?)\s+(\d+):(\d+)$', ref)
             if not m:
                 continue
@@ -222,7 +238,7 @@ def load_verse_index(bible_dir: Path, filename: str) -> dict:
             index.setdefault(book, {}).setdefault(ch, 0)
             if vs > index[book][ch]:
                 index[book][ch] = vs
-    return index
+    return index, verses
 
 
 class BviView:
@@ -327,7 +343,10 @@ class BviView:
 
         self._build_controls()
         self._build_preview()
-        self.root.after(100, self._position_windows)
+        if sys.platform == "linux":
+            self.root.after(100, self._position_windows)
+        else:
+            self._position_windows()
         self._load_index(self.version_var.get())
         # Apply default theme (if any) — overrides .bvi values; also triggers render
         default_name = self._bvilive_state.get("default_theme", "")
@@ -668,7 +687,12 @@ class BviView:
         ref = self.ref_var.get().strip()
         default_out = (re.sub(r'[^\w]+', '_', ref).strip('_') + ".jpg") if ref else "bvilive_output.jpg"
         cmd = [f"--output={default_out}" if a.startswith("--output=") else a for a in cmd]
-        text = shlex.join(cmd)
+        # Use Windows double-quote style on Windows (shlex.join uses POSIX single-quotes
+        # which are literal characters in cmd.exe and cause arguments to be misread).
+        if sys.platform == "win32":
+            text = subprocess.list2cmdline(cmd)
+        else:
+            text = shlex.join(cmd)
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
         self.status_var.set("bvi command copied to clipboard")
@@ -705,16 +729,18 @@ class BviView:
             save_bvilive_state(self._bvilive_path, self._bvilive_state)
 
     def _browse_font(self):
-        path = self._font_list_picker(self.font_var.get())
+        path = self._font_list_picker(self.font_var.get(), preview_attr="font_var")
         if path:
             self.font_var.set(path)
 
     def _browse_citefont(self):
-        path = self._font_list_picker(self.citefont_var.get() or self.font_var.get())
+        path = self._font_list_picker(
+            self.citefont_var.get() or self.font_var.get(),
+            preview_attr="citefont_var")
         if path:
             self.citefont_var.set(path)
 
-    def _font_list_picker(self, current: str = "") -> str:
+    def _font_list_picker(self, current: str = "", preview_attr: str = "font_var") -> str:
         """Searchable font picker with All / Favorites views and live preview."""
         if sys.platform == "win32":
             win_fonts = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
@@ -745,7 +771,8 @@ class BviView:
         if not entries:
             return ""
 
-        original_font = self.font_var.get()
+        preview_var_obj = getattr(self, preview_attr)
+        original_font = preview_var_obj.get()
         favs: set = set(filter(None, self._bvilive_state.get("font_favorites", "").split("|")))
         _preview_id = [None]
 
@@ -808,8 +835,8 @@ class BviView:
             if not preview_var.get():
                 return
             p = _selected_path()
-            if p and p != self.font_var.get():
-                self.font_var.set(p)
+            if p and p != preview_var_obj.get():
+                preview_var_obj.set(p)
                 if _preview_id[0]:
                     self.root.after_cancel(_preview_id[0])
                 _preview_id[0] = self.root.after(150, self._render)
@@ -870,8 +897,8 @@ class BviView:
         def cancel():
             if _preview_id[0]:
                 self.root.after_cancel(_preview_id[0])
-            if preview_var.get() and self.font_var.get() != original_font:
-                self.font_var.set(original_font)
+            if preview_var.get() and preview_var_obj.get() != original_font:
+                preview_var_obj.set(original_font)
                 self.root.after(0, self._render)
             dlg.destroy()
 
@@ -879,6 +906,11 @@ class BviView:
             sel = lb.curselection()
             if sel:
                 result.append(visible[sel[0]][1])
+            # Restore the preview variable — the caller sets the right target var after we return
+            if _preview_id[0]:
+                self.root.after_cancel(_preview_id[0])
+            if preview_var_obj.get() != original_font:
+                preview_var_obj.set(original_font)
             dlg.destroy()
 
         lb.bind("<Double-1>", confirm)
@@ -937,8 +969,10 @@ class BviView:
             self.verse_index = self._index_cache[version]
             return
         filename = BIBLES.get(version, "BibleKJV.txt")
-        self.verse_index = load_verse_index(self.bible_dir, filename)
-        self._index_cache[version] = self.verse_index
+        index, verses = load_verse_index(self.bible_dir, filename)
+        self.verse_index = index
+        self._index_cache[version] = index
+        self._verse_text_cache[version] = verses   # pre-warm; avoids second file read on first render
 
     def _on_version_change(self):
         self._load_index(self.version_var.get())
@@ -999,7 +1033,7 @@ class BviView:
         version = self.version_var.get()
         if version not in self._verse_text_cache:
             filename = BIBLES.get(version, "BibleKJV.txt")
-            path = self.bible_dir / filename
+            path = _find_bible_path(self.bible_dir, filename)
             verses: dict = {}
             try:
                 with open(path, encoding="utf-8-sig") as fh:
@@ -1046,18 +1080,30 @@ class BviView:
         parts = [verses.get(f"{base}{v}", "") for v in range(start, end + 1)]
         return " ".join(p for p in parts if p)
 
-    def _fit_fontsize_pillow(self, text: str, max_cap: int = 0) -> int:
+    def _fit_fontsize_pillow(self, text: str, max_cap: int = 0,
+                             img_w: int = 0, img_h: int = 0) -> int:
         """Return largest pointsize where text fits the verse area; 0 = unable."""
         font_path = self.font_var.get().strip()
-        if not font_path:
-            font_path = r"C:\Windows\Fonts\pala.ttf" if sys.platform == "win32" else ""
+        if sys.platform == "win32" and not os.path.isfile(font_path):
+            # font_path may be empty or a PostScript name (valid on macOS, not a file on Windows).
+            # Fall back to guaranteed Windows fonts so the fast Pillow path is always available.
+            for _candidate in (r"C:\Windows\Fonts\georgia.ttf",
+                               r"C:\Windows\Fonts\arial.ttf",
+                               r"C:\Windows\Fonts\pala.ttf",
+                               r"C:\Windows\Fonts\calibri.ttf",
+                               r"C:\Windows\Fonts\times.ttf"):
+                if os.path.isfile(_candidate):
+                    font_path = _candidate
+                    break
         if not font_path or not os.path.isfile(font_path):
             return 0
         if self.quotes_var.get() and not self.customtext_enabled.get():
             text = "“" + text + "”"
         try:
-            img_w = int(self.width_var.get().strip() or "1920")
-            img_h = int(self.height_var.get().strip() or "1080")
+            if not img_w:
+                img_w = int(self.width_var.get().strip() or "1920")
+            if not img_h:
+                img_h = int(self.height_var.get().strip() or "1080")
         except ValueError:
             return 0
         ts = self.textscale_var.get().strip()
@@ -1077,11 +1123,16 @@ class BviView:
         hi = min(target_w // 2, target_h)
         if max_cap > 0:
             hi = min(hi, max_cap)
+        try:
+            with open(font_path, "rb") as _fh:
+                _font_bytes = _fh.read()
+        except OSError:
+            return 0
         lo, best, words = 8, 8, text.split()
         while lo <= hi:
             mid = (lo + hi) // 2
             try:
-                font = ImageFont.truetype(font_path, mid)
+                font = ImageFont.truetype(io.BytesIO(_font_bytes), mid)
             except Exception:
                 return 0
             lines, cur = [], []
@@ -1133,6 +1184,16 @@ class BviView:
             ct = self.customtext_var.get()
             if ct:
                 cmd.append(f"--text={ct}")
+        # Render at half the configured resolution for live preview — visually
+        # equivalent but ~4× fewer pixels for ImageMagick to process.
+        try:
+            _cw = int(self.width_var.get().strip() or "1920")
+            _ch = int(self.height_var.get().strip() or "1080")
+        except ValueError:
+            _cw, _ch = 1920, 1080
+        _pw = max(320, _cw // 2)
+        _ph = max(180, _ch // 2)
+
         mf     = self.maxtextsize_var.get().strip()
         tp_abs = self.textsize_var.get().strip()
         ts     = self.textscale_var.get().strip()
@@ -1142,7 +1203,8 @@ class BviView:
             max_cap = int(mf) if re.fullmatch(r'\d+', mf) and int(mf) > 0 else 0
             lookup = self._lookup_text()
             if lookup:
-                fitted = self._fit_fontsize_pillow(lookup, max_cap)
+                fitted = self._fit_fontsize_pillow(lookup, max_cap,
+                                                   img_w=_pw, img_h=_ph)
                 if fitted > 0 and not text_mode:
                     cmd.append(f"--text={lookup}")
         if fitted > 0:
@@ -1165,12 +1227,8 @@ class BviView:
             cmd.append(f"--citefont={citefont}")
         cs = self.citescale_var.get().strip()
         cmd.append(f"--citescale={cs}" if re.fullmatch(r'\d+', cs) else "--citescale=100")
-        w = self.width_var.get().strip()
-        if re.fullmatch(r'\d+', w):
-            cmd.append(f"--width={w}")
-        h = self.height_var.get().strip()
-        if re.fullmatch(r'\d+', h):
-            cmd.append(f"--height={h}")
+        cmd.append(f"--width={_pw}")
+        cmd.append(f"--height={_ph}")
         if self.quotes_var.get() and not text_mode:
             cmd.append("--quotes")
         bg = self.bg_var.get().strip()
