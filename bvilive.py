@@ -22,7 +22,8 @@ except ImportError:
 
 BVI         = str(Path(__file__).parent / ("bvi.exe" if sys.platform == "win32" else "bvi"))
 BIBLES      = {"KJV": "BibleKJV.txt", "BSB": "BibleBSB.txt", "WEB": "BibleWEB.txt"}
-TMP_JPG     = tempfile.mktemp(suffix=".jpg", prefix="bvilive_")
+_tmp_fd, TMP_JPG = tempfile.mkstemp(suffix=".jpg", prefix="bvilive_")
+os.close(_tmp_fd)
 CONFIG_FILE = ".luminaverse"
 
 PREVIEW_W = 960   # display width  (half of default 1920)
@@ -268,6 +269,7 @@ class BviView:
         self._photo        = None     # keep ImageTk ref alive
         self._last_ref     = ""
         self._live_active  = True
+        self._browse_ref_geometry: str | None = None
 
         cfg = load_bvi_config()
 
@@ -375,13 +377,15 @@ class BviView:
         # Reference
         tk.Label(f, text="Reference:").grid(row=1, column=0, sticky="e", **pad)
         ref_e = tk.Entry(f, textvariable=self.ref_var, width=30, font=("", 13))
-        ref_e.grid(row=1, column=1, columnspan=3, sticky="ew", **pad)
+        ref_e.grid(row=1, column=1, columnspan=2, sticky="ew", **pad)
         ref_e.bind("<Return>",    lambda _: self._schedule(0))
         ref_e.bind("<Up>",        lambda _: self._step(-1))
         ref_e.bind("<Down>",      lambda _: self._step(+1))
         ref_e.bind("<Prior>",     lambda _: self._step_chapter(-1))  # Page Up
         ref_e.bind("<Next>",      lambda _: self._step_chapter(+1))  # Page Down
         self.ref_var.trace_add("write", lambda *_: self._schedule(400))
+        tk.Button(f, text="…", padx=2,
+                  command=self._browse_ref).grid(row=1, column=3, sticky="w", padx=(0, 6), pady=3)
 
         # ← / → navigate verses globally; skip when an Entry has keyboard focus
         self.root.bind_all("<Left>",  self._on_key_left)
@@ -929,6 +933,175 @@ class BviView:
 
         dlg.wait_window()
         return result[0] if result else ""
+
+    def _browse_ref(self):
+        """Three-column Book / Chapter / Verse picker dialog."""
+        if not self.verse_index:
+            return
+
+        books = list(self.verse_index.keys())
+        book0, ch0, vs0, _ = self._parse_ref()
+        if book0 not in self.verse_index:
+            book0 = books[0] if books else None
+            ch0, vs0 = 1, 1
+        if ch0 is None:
+            ch0 = 1
+        if vs0 is None:
+            vs0 = 1
+
+        verse_texts = self._get_verse_texts()
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Go to Verse")
+        dlg.grab_set()
+        dlg.resizable(True, True)
+        if self._browse_ref_geometry:
+            dlg.geometry(self._browse_ref_geometry)
+        result: list = []
+
+        outer = ttk.Frame(dlg, padding=8)
+        outer.pack(fill="both", expand=True)
+        outer.columnconfigure(0, weight=0)
+        outer.columnconfigure(1, weight=0)
+        outer.columnconfigure(2, weight=1)
+        outer.rowconfigure(1, weight=1)
+
+        def _make_col(label_text, col, width, hscroll=False):
+            ttk.Label(outer, text=label_text).grid(row=0, column=col, sticky="w",
+                                                   padx=(0, 6), pady=(0, 2))
+            frm = ttk.Frame(outer)
+            frm.grid(row=1, column=col, sticky="nsew", padx=(0, 8 if col < 2 else 0))
+            frm.columnconfigure(0, weight=1)
+            frm.rowconfigure(0, weight=1)
+            sb = ttk.Scrollbar(frm, orient="vertical")
+            lb = tk.Listbox(frm, yscrollcommand=sb.set, width=width, height=30,
+                            selectmode="single", activestyle="dotbox",
+                            exportselection=False)
+            sb.config(command=lb.yview)
+            if hscroll:
+                xsb = ttk.Scrollbar(frm, orient="horizontal")
+                lb.config(xscrollcommand=xsb.set)
+                xsb.config(command=lb.xview)
+                xsb.pack(side="bottom", fill="x")
+            sb.pack(side="right", fill="y")
+            lb.pack(side="left", fill="both", expand=True)
+            return lb
+
+        book_lb  = _make_col("Book",    0, 20)
+        ch_lb    = _make_col("Chapter", 1,  8)
+        verse_lb = _make_col("Verse",   2, 56, hscroll=True)
+
+        def _fill_chapters(book):
+            ch_lb.delete(0, "end")
+            if not book or book not in self.verse_index:
+                return
+            for ch in sorted(self.verse_index[book].keys()):
+                ch_lb.insert("end", str(ch))
+
+        def _fill_verses(book, ch):
+            verse_lb.delete(0, "end")
+            if not book or book not in self.verse_index:
+                return
+            max_vs = self.verse_index[book].get(ch, 0)
+            for vs in range(1, max_vs + 1):
+                ref  = f"{book} {ch}:{vs}"
+                text = verse_texts.get(ref, "")
+                verse_lb.insert("end", f"{vs:>3}  {text}")
+
+        def _on_book_select(_=None):
+            sel = book_lb.curselection()
+            if not sel:
+                return
+            book = books[sel[0]]
+            _fill_chapters(book)
+            chapters = sorted(self.verse_index.get(book, {}).keys())
+            if chapters:
+                ch_lb.selection_set(0)
+                ch_lb.see(0)
+                _fill_verses(book, chapters[0])
+                if verse_lb.size():
+                    verse_lb.selection_set(0)
+                    verse_lb.see(0)
+
+        def _on_ch_select(_=None):
+            bsel = book_lb.curselection()
+            csel = ch_lb.curselection()
+            if not bsel or not csel:
+                return
+            book = books[bsel[0]]
+            ch   = int(ch_lb.get(csel[0]))
+            _fill_verses(book, ch)
+            if verse_lb.size():
+                verse_lb.selection_set(0)
+                verse_lb.see(0)
+
+        def _current_ref() -> str:
+            bsel = book_lb.curselection()
+            csel = ch_lb.curselection()
+            vsel = verse_lb.curselection()
+            if not bsel or not csel or not vsel:
+                return ""
+            book  = books[bsel[0]]
+            ch    = int(ch_lb.get(csel[0]))
+            vs    = int(verse_lb.get(vsel[0]).split()[0])
+            return f"{book} {ch}:{vs}"
+
+        def _save_pos():
+            self._browse_ref_geometry = dlg.geometry()
+
+        def confirm(*_):
+            _save_pos()
+            ref = _current_ref()
+            if ref:
+                result.append(ref)
+            dlg.destroy()
+
+        def cancel(*_):
+            _save_pos()
+            dlg.destroy()
+
+        book_lb.bind("<<ListboxSelect>>", _on_book_select)
+        ch_lb.bind("<<ListboxSelect>>",   _on_ch_select)
+        verse_lb.bind("<Double-1>",       confirm)
+        verse_lb.bind("<Return>",         confirm)
+        dlg.protocol("WM_DELETE_WINDOW",  cancel)
+
+        # Bottom buttons
+        bf = ttk.Frame(outer)
+        bf.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        ttk.Button(bf, text="Cancel", command=cancel).pack(side="right", padx=(4, 0))
+        ttk.Button(bf, text="OK",     command=confirm).pack(side="right")
+
+        # Initial population
+        for b in books:
+            book_lb.insert("end", b)
+        _fill_chapters(book0)
+        _fill_verses(book0, ch0)
+
+        # Pre-select current book
+        if book0 in books:
+            bi = books.index(book0)
+            book_lb.selection_set(bi)
+            book_lb.see(bi)
+
+        # Pre-select current chapter
+        chapters = sorted(self.verse_index.get(book0, {}).keys())
+        if ch0 in chapters:
+            ci = chapters.index(ch0)
+            ch_lb.selection_set(ci)
+            ch_lb.see(ci)
+
+        # Pre-select current verse
+        max_vs = self.verse_index.get(book0, {}).get(ch0, 0)
+        if max_vs > 0:
+            vi = max(0, min(vs0 - 1, max_vs - 1))
+            verse_lb.selection_set(vi)
+            verse_lb.see(vi)
+
+        dlg.wait_window()
+        if result:
+            self.ref_var.set(result[0])
+            self._schedule(0)
 
     def _browse_bgphoto(self):
         path = filedialog.askopenfilename(
