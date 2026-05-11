@@ -576,7 +576,7 @@ class TextImageView:
 
         # ── Row 21: Status ────────────────────────────────────────────────────
         tk.Label(f, textvariable=self.status_var, fg="gray45",
-                 anchor="w", width=46).grid(row=21, column=0, columnspan=4, **pad)
+                 anchor="w").grid(row=21, column=0, columnspan=4, sticky="w", **pad)
 
     def _make_color_row(self, parent, label: str, var: tk.StringVar, row: int, col_start: int = 0):
         s = getattr(self, 'ui_scale', 1.0)
@@ -1335,9 +1335,7 @@ class TextImageView:
         try:
             img = Image.open(TMP_JPG)
             self._display_image(img)
-            text = self._get_text()
-            preview = text.replace("\n", " ↵ ")[:60]
-            self.status_var.set(preview)
+            self.status_var.set("Ready")
         except Exception as exc:
             self.status_var.set(str(exc))
 
