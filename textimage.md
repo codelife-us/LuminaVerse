@@ -109,12 +109,14 @@ A semi-transparent colored rectangle drawn behind the text block improves contra
 ./textimage "He is risen." --bgphoto=photo.jpg --textpanel=60
 ./textimage "He is risen." --bgphoto=photo.jpg --textpanel=70 --textpanelcolor="#001020"
 ./textimage "He is risen." --textpanel=50 --textpanelrounded
+./textimage "He is risen." --textpanel=50 --textpanelpadding=20
 ```
 
 | Option | Default | Description |
 |---|---|---|
 | `--textpanel=N` | `0` (off) | Panel opacity 1–100 |
 | `--textpanelcolor=COLOR` | `black` | Panel color; any ImageMagick color |
+| `--textpanelpadding=N` | `0` | Extra pixels of padding around the text inside the panel |
 | `--textpanelrounded` | off | Rounded corners on the panel |
 | `--no-textpanelrounded` | _(default)_ | Square corners |
 
@@ -265,6 +267,23 @@ By default `--text2` inherits `--textshadow`, `--shadowmethod`, `--textoutline`,
 
 When a text2 override is not specified the option inherits from the corresponding text1 setting, so setting `--textshadow=5` applies to both blocks unless `--text2shadow` overrides it.
 
+### Per-block text size
+
+By default text2 inherits `--textsize` and `--maxtextsize` from text1. Override independently to make the second block larger or smaller than the first:
+
+```bash
+./textimage "He is risen." --text2="1 Corinthians 15:20" --text2size=60
+./textimage "He is risen." --maxtextsize=180 --text2="Amen." --text2maxtextsize=80
+./textimage "He is risen." --textsize=140 --text2="Death has no power." --text2size=80
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--text2size=N` | _(same as `--textsize`)_ | Fixed point size for the second block |
+| `--text2maxtextsize=N` | _(same as `--maxtextsize`)_ | Auto-fit cap in pt for the second block |
+
+When neither `--text2size` nor `--text2maxtextsize` is set, text2 uses whatever pointsize was resolved for text1 (fixed, capped, or auto-fit), keeping both blocks the same size as before.
+
 ## Text Size
 
 By default the text auto-fits to the largest size that fills the canvas. Use one of these options to control the size — `--textsize`/`--maxtextsize` and `--textscale` cannot be combined.
@@ -333,6 +352,7 @@ maxtextsize      = 0
 textscale        = 100
 textpanel        = 0
 textpanelcolor   = black
+textpanelpadding = 0
 textpanelrounded = no
 textshadow       = no
 shadowmethod     = 1
@@ -348,9 +368,11 @@ text2outline     =
 text2outlinecolor=
 text2shadow      =
 text2shadowmethod=
+text2size        =
+text2maxtextsize =
 ```
 
-Supported keys: `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `textsize`, `maxtextsize`, `textscale`, `textpanel`, `textpanelcolor`, `textpanelrounded`, `textshadow`, `shadowmethod`, `textoutline`, `textoutlinecolor`, `linespacing`, `textoffy`, `reservetop`, `reserveright`, `reservebottom`, `reserveleft`, `text2outline`, `text2outlinecolor`, `text2shadow`, `text2shadowmethod`
+Supported keys: `width`, `height`, `font`, `bg`, `bgphoto`, `dim`, `textcolor`, `textsize`, `maxtextsize`, `textscale`, `textpanel`, `textpanelcolor`, `textpanelpadding`, `textpanelrounded`, `textshadow`, `shadowmethod`, `textoutline`, `textoutlinecolor`, `linespacing`, `textoffy`, `reservetop`, `reserveright`, `reservebottom`, `reserveleft`, `text2outline`, `text2outlinecolor`, `text2shadow`, `text2shadowmethod`, `text2size`, `text2maxtextsize`
 
 The `text2` override keys are blank by default (inherit from the corresponding text1 setting). Set them to a value only when you want to override.
 

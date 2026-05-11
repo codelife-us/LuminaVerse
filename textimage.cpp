@@ -199,6 +199,8 @@ void printHelp() {
     cout << "  --text2shadow[=N]       Shadow intensity for text2 (default: same as --textshadow)\n";
     cout << "  --no-text2shadow        No shadow for text2\n";
     cout << "  --text2shadowmethod=N   Shadow method for text2 (default: same as --shadowmethod)\n";
+    cout << "  --text2size=N           Fixed point size for text2 (default: same as --textsize)\n";
+    cout << "  --text2maxtextsize=N    Auto-fit cap in pt for text2 (default: same as --maxtextsize)\n";
     cout << "  --output=FILE           Output image file (default: derived from text)\n";
     cout << "  --width=N               Image width in pixels (default: 1920)\n";
     cout << "  --height=N              Image height in pixels (default: 1080)\n";
@@ -212,6 +214,7 @@ void printHelp() {
     cout << "  --textscale=PCT         Scale text area to PCT% of default (e.g. 75); cannot combine with --textsize/--maxtextsize\n";
     cout << "  --textpanel=N           Semi-transparent panel behind text, N=opacity 1-100 (default: off)\n";
     cout << "  --textpanelcolor=COLOR  Panel color (default: black); any ImageMagick color\n";
+    cout << "  --textpanelpadding=N    Extra pixels of padding around text inside panel (default: 0)\n";
     cout << "  --textpanelrounded      Rounded corners on text panel\n";
     cout << "  --no-textpanelrounded   Square corners (default)\n";
     cout << "  --textshadow[=N]        Add drop shadow behind text; N=1-10 intensity (default 5)\n";
@@ -227,7 +230,7 @@ void printHelp() {
     cout << "Config file (.verselumen in current directory or $HOME, [textimage] section):\n";
     cout << "  --saveconfig            Save current settings to .verselumen [textimage] as new defaults\n";
     cout << "  --showconfig            Print current effective settings and exit\n\n";
-    cout << "  Supported keys in [textimage]:  width  height  font  bg  bgphoto  dim  textcolor  textsize  maxtextsize  textscale  textpanel  textpanelcolor  textpanelrounded  textshadow  shadowmethod  textoutline  textoutlinecolor  linespacing  textoffy  reservetop  reserveright  reservebottom  reserveleft\n\n";
+    cout << "  Supported keys in [textimage]:  width  height  font  bg  bgphoto  dim  textcolor  textsize  maxtextsize  textscale  textpanel  textpanelcolor  textpanelpadding  textpanelrounded  textshadow  shadowmethod  textoutline  textoutlinecolor  linespacing  textoffy  reservetop  reserveright  reservebottom  reserveleft\n\n";
     cout << "Requires:\n";
     cout << "  ImageMagick  —  brew install imagemagick\n\n";
     cout << "Examples:\n";
@@ -307,6 +310,7 @@ int main(int argc, char* argv[]) {
     int textScalePct     = stoi(cfgGet(cfg, "textscale",     "100"));
     int textPanelOpacity = stoi(cfgGet(cfg, "textpanel",     "0"));
     string textPanelColor = cfgGet(cfg, "textpanelcolor",   "black");
+    int textPanelPad     = max(0, stoi(cfgGet(cfg, "textpanelpadding", "0")));
     auto parseShadow = [](const string& v) -> int {
         if (v == "yes") return 5;
         if (v == "no" || v.empty()) return 0;
@@ -331,6 +335,8 @@ int main(int argc, char* argv[]) {
     string text2OutlineColor = "";   // "" = inherit from textOutlineColor
     int    text2Shadow       = -1;   // -1 = inherit from textShadow
     int    text2ShadowMethod = -1;   // -1 = inherit from shadowMethod
+    int    text2SizePt       = -1;   // -1 = inherit from textSizePt
+    int    text2MaxSizePt    = -1;   // -1 = inherit from maxTextSizePt
 
     bool saveConfig  = false;
     bool showConfig  = false;
@@ -370,6 +376,10 @@ int main(int argc, char* argv[]) {
             text2Shadow = 0;
         } else if (arg.find("--text2shadowmethod=") == 0) {
             text2ShadowMethod = max(1, min(2, stoi(arg.substr(20))));
+        } else if (arg.find("--text2size=") == 0) {
+            text2SizePt = max(0, stoi(arg.substr(12)));
+        } else if (arg.find("--text2maxtextsize=") == 0) {
+            text2MaxSizePt = max(0, stoi(arg.substr(19)));
         } else if (arg.find("--output=") == 0) {
             outputFile = arg.substr(9);
         } else if (arg.find("--width=") == 0) {
@@ -396,6 +406,8 @@ int main(int argc, char* argv[]) {
             textPanelOpacity = stoi(arg.substr(12));
         } else if (arg.find("--textpanelcolor=") == 0) {
             textPanelColor = arg.substr(17);
+        } else if (arg.find("--textpanelpadding=") == 0) {
+            textPanelPad = max(0, stoi(arg.substr(19)));
         } else if (arg.find("--textshadow=") == 0) {
             textShadow = max(0, min(10, stoi(arg.substr(13))));
         } else if (arg == "--textshadow") {
@@ -471,6 +483,7 @@ int main(int argc, char* argv[]) {
         cout << "  textscale        = " << textScalePct << "%\n";
         cout << "  textpanel        = " << (textPanelOpacity > 0 ? to_string(textPanelOpacity) + "%" : "off") << "\n";
         cout << "  textpanelcolor   = " << textPanelColor << "\n";
+        cout << "  textpanelpadding = " << textPanelPad << "\n";
         cout << "  textpanelrounded = " << (panelRounded ? "yes" : "no") << "\n";
         cout << "  textshadow       = " << (textShadow > 0 ? to_string(textShadow) : "no") << "\n";
         cout << "  shadowmethod     = " << shadowMethod << "\n";
@@ -490,6 +503,8 @@ int main(int argc, char* argv[]) {
         cout << "  text2outlinecolor= " << (text2OutlineColor.empty() ? "(same as textoutlinecolor)" : text2OutlineColor) << "\n";
         cout << "  text2shadow      = " << (text2Shadow < 0 ? "(same as textshadow)" : (text2Shadow > 0 ? to_string(text2Shadow) : "no")) << "\n";
         cout << "  text2shadowmethod= " << (text2ShadowMethod < 0 ? "(same as shadowmethod)" : to_string(text2ShadowMethod)) << "\n";
+        cout << "  text2size        = " << (text2SizePt    >= 0 ? to_string(text2SizePt)    : "(same as textsize)") << "\n";
+        cout << "  text2maxtextsize = " << (text2MaxSizePt >= 0 ? to_string(text2MaxSizePt) : "(same as maxtextsize)") << "\n";
         ifstream check(CONFIG_FILE);
         if (check.good())
             cout << "\nConfig file: ./" << CONFIG_FILE << " (loaded)\n";
@@ -520,6 +535,7 @@ int main(int argc, char* argv[]) {
             "textscale        = " + to_string(textScalePct),
             "textpanel        = " + to_string(textPanelOpacity),
             "textpanelcolor   = " + textPanelColor,
+            "textpanelpadding = " + to_string(textPanelPad),
             "textpanelrounded = " + string(panelRounded ? "yes" : "no"),
             "textshadow       = " + (textShadow > 0 ? to_string(textShadow) : string("no")),
             "shadowmethod     = " + to_string(shadowMethod),
@@ -538,7 +554,9 @@ int main(int argc, char* argv[]) {
             "text2outline     = " + (text2Outline < 0 ? string("") : (text2Outline > 0 ? to_string(text2Outline) : string("0"))),
             "text2outlinecolor= " + text2OutlineColor,
             "text2shadow      = " + (text2Shadow < 0 ? string("") : (text2Shadow > 0 ? to_string(text2Shadow) : string("no"))),
-            "text2shadowmethod= " + (text2ShadowMethod < 0 ? string("") : to_string(text2ShadowMethod))
+            "text2shadowmethod= " + (text2ShadowMethod < 0 ? string("") : to_string(text2ShadowMethod)),
+            "text2size        = " + (text2SizePt    >= 0 ? to_string(text2SizePt)    : string("")),
+            "text2maxtextsize = " + (text2MaxSizePt >= 0 ? to_string(text2MaxSizePt) : string(""))
         };
         if (!writeSection(lines)) { cerr << "Error: could not write '" << CONFIG_FILE << "'.\n"; return 1; }
         cerr << "Saved [" << SECTION << "] to ./" << CONFIG_FILE << "\n";
@@ -652,7 +670,7 @@ int main(int argc, char* argv[]) {
                                    const string& tmpOut) {
         if (outline <= 0) return;
         ostringstream cmd;
-        cmd << im << " \"" << layer << "\""
+        cmd << im << " \"" << layer << "\" +repage"
             << " " << LP << " +clone -channel alpha"
             << " -morphology Dilate disk:" << outline
             << " +channel -fill \"" << outColor << "\" -colorize 100 " << RP
@@ -669,7 +687,7 @@ int main(int argc, char* argv[]) {
         int    offset  = max(1, (int)round(shadow * 0.6));
         int    opacity = (method == 1) ? 80 : 100;
         ostringstream cmd;
-        cmd << im << " \"" << layer << "\""
+        cmd << im << " \"" << layer << "\" +repage"
             << " " << LP << " +clone -background black -shadow " << opacity << "x" << sigma
             << "+" << offset << "+" << offset << " " << RP
             << " +swap -background none -flatten"
@@ -724,6 +742,38 @@ int main(int argc, char* argv[]) {
 
         const string& t2color = text2color.empty() ? textColor : text2color;
         const string& t2font  = text2font.empty()  ? font      : text2font;
+
+        // Determine text2 pointsize (independent when --text2size/--text2maxtextsize given)
+        int eff2MaxSizePt = (text2MaxSizePt >= 0) ? text2MaxSizePt : maxTextSizePt;
+        int eff2SizePt    = (text2SizePt    >= 0) ? text2SizePt    : textSizePt;
+        bool applyPointsize2  = false;
+        int  applyPointsizeN2 = 0;
+        if (eff2MaxSizePt > 0) {
+            ostringstream qcmd2;
+            qcmd2 << im
+                  << " -background \"" << layerBg << "\""
+                  << " -fill \""       << t2color << "\""
+                  << " -font \""       << t2font  << "\""
+                  << " -gravity Center"
+                  << (lineSpacing != 0 ? " -interline-spacing " + to_string(lineSpacing) : "")
+                  << " -size "         << textW << "x" << textH_each
+                  << " caption:"       << quotedText2
+                  << " -verbose info:";
+            int autoFitSize2 = 0;
+            FILE* pipe2 = runPopen(qcmd2.str(), "r");
+            if (pipe2) {
+                char buf[256];
+                while (fgets(buf, sizeof(buf), pipe2))
+                    if (sscanf(buf, " caption:pointsize: %d", &autoFitSize2) == 1) break;
+                pclose(pipe2);
+            }
+            applyPointsize2  = (autoFitSize2 == 0 || autoFitSize2 > eff2MaxSizePt);
+            applyPointsizeN2 = eff2MaxSizePt;
+        } else if (eff2SizePt > 0) {
+            applyPointsize2  = true;
+            applyPointsizeN2 = eff2SizePt;
+        }
+
         ostringstream cmd1b;
         cmd1b << im
               << " -background \"" << layerBg << "\""
@@ -732,7 +782,7 @@ int main(int argc, char* argv[]) {
               << " -gravity Center"
               << (lineSpacing != 0 ? " -interline-spacing " + to_string(lineSpacing) : "")
               << " -size "         << textW << "x" << textH_each
-              << (applyPointsize ? " -pointsize " + to_string(applyPointsizeN) : "")
+              << (applyPointsize2 ? " -pointsize " + to_string(applyPointsizeN2) : "")
               << " caption:"       << quotedText2
               << " -trim"
               << " -bordercolor \"" << layerBg << "\""
@@ -800,17 +850,18 @@ int main(int argc, char* argv[]) {
     // ── Panel fragment ────────────────────────────────────────────────────
     ostringstream panelDraw;
     if (textPanelOpacity > 0 && layerW > 0 && layerH > 0) {
-        int panelH = layerH;
+        int panelW = layerW + 2 * textPanelPad;
+        int panelH = layerH + 2 * textPanelPad;
         int cornerR = max(4, (int)(12 * scale));
         if (panelRounded) {
-            panelDraw << " " << LP << " -size " << layerW << "x" << panelH
+            panelDraw << " " << LP << " -size " << panelW << "x" << panelH
                       << " xc:none -fill \"" << textPanelColor << "\""
-                      << " -draw \"roundrectangle 0,0 " << (layerW-1) << "," << (panelH-1)
+                      << " -draw \"roundrectangle 0,0 " << (panelW-1) << "," << (panelH-1)
                       << " " << cornerR << "," << cornerR << "\""
                       << " -alpha set -channel Alpha -evaluate multiply "
                       << (textPanelOpacity / 100.0) << " +channel " << RP;
         } else {
-            panelDraw << " " << LP << " -size " << layerW << "x" << panelH
+            panelDraw << " " << LP << " -size " << panelW << "x" << panelH
                       << " xc:\"" << textPanelColor << "\""
                       << " -alpha set -channel Alpha -evaluate multiply "
                       << (textPanelOpacity / 100.0) << " +channel " << RP;

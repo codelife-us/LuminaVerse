@@ -70,6 +70,7 @@ THEME_KEYS = [
     ("textscale",        "textscale_var",         "str",  ""),
     ("textpanel",        "textpanel_var",         "str",  ""),
     ("textpanelcolor",   "textpanelcolor_var",    "str",  "black"),
+    ("textpanelpadding", "textpanelpadding_var",  "str",  ""),
     ("textshadow",       "textshadow_var",        "str",  "0"),
     ("shadowmethod",     "shadowmethod_var",      "str",  "1"),
     ("textoutline",      "textoutline_var",       "str",  "0"),
@@ -263,9 +264,10 @@ class TextImageView:
         self.shadowmethod_var   = tk.StringVar(value=_cfg("shadowmethod",     "1"))
         self.textoutline_var    = tk.StringVar(value=_cfg("textoutline",      "0"))
         self.textoutlinecolor_var = tk.StringVar(value=_cfg("textoutlinecolor", "black"))
-        self.textpanel_var      = tk.StringVar(value=_cfg("textpanel",        ""))
-        self.textpanelcolor_var = tk.StringVar(value=_cfg("textpanelcolor",   "black"))
-        self.panelrounded_var   = tk.BooleanVar(value=_cfg("textpanelrounded", "no") == "yes")
+        self.textpanel_var        = tk.StringVar(value=_cfg("textpanel",        ""))
+        self.textpanelcolor_var   = tk.StringVar(value=_cfg("textpanelcolor",   "black"))
+        self.textpanelpadding_var = tk.StringVar(value=_cfg("textpanelpadding", ""))
+        self.panelrounded_var     = tk.BooleanVar(value=_cfg("textpanelrounded", "no") == "yes")
         self.linespacing_var    = tk.StringVar(value=_cfg("linespacing", "0"))
         self.reserve_top_var    = tk.StringVar(value=_cfg("reservetop",    "0"))
         self.reserve_right_var  = tk.StringVar(value=_cfg("reserveright",  "0"))
@@ -412,9 +414,12 @@ class TextImageView:
         _tp_right.grid(row=7, column=2, columnspan=2, sticky="w", **pad)
         tk.Label(_tp_right, text="Panel Dim %:").pack(side="left")
         tk.Entry(_tp_right, textvariable=self.textpanel_var, width=4).pack(side="left", padx=(2, 8))
+        tk.Label(_tp_right, text="Pad:").pack(side="left")
+        tk.Entry(_tp_right, textvariable=self.textpanelpadding_var, width=4).pack(side="left", padx=(2, 8))
         tk.Checkbutton(_tp_right, text="Rounded", variable=self.panelrounded_var,
                        command=lambda: self._schedule(0)).pack(side="left")
         self.textpanel_var.trace_add("write", lambda *_: self._schedule(400))
+        self.textpanelpadding_var.trace_add("write", lambda *_: self._schedule(400))
 
         # ── Row 9: Line spacing / Gap between texts ───────────────────────────
         tk.Label(f, text="Line spacing:").grid(row=9, column=0, sticky="e", **pad)
@@ -1177,6 +1182,9 @@ class TextImageView:
         tpc = self.textpanelcolor_var.get().strip()
         if tpc and tpc != "black":
             cmd.append(f"--textpanelcolor={tpc}")
+        tpp = self.textpanelpadding_var.get().strip()
+        if re.fullmatch(r'\d+', tpp) and int(tpp) > 0:
+            cmd.append(f"--textpanelpadding={tpp}")
 
         ls = self.linespacing_var.get().strip()
         if re.fullmatch(r'-?\d+', ls) and ls != "0":
