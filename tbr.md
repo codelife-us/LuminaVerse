@@ -44,8 +44,40 @@ tbr -1 -n            # yesterday, no YouTube
 | `-g=VERSION` | Open on BibleGateway with a specific version (e.g. `NKJV`, `NIV`, `ESV`) |
 | `-n`, `--no-youtube` | Skip opening YouTube |
 | `-y`, `--youtube` | Open YouTube (overrides `youtube = no` in config) |
+| `--showconfig` | Print current effective settings and exit |
+| `--saveconfig` | Save current settings to `~/.verselumen [tbr]` |
+| `setup` | Interactive setup wizard |
 
-All flags and the date/offset can appear in any order.
+All flags and the date/offset can appear in any order. Flags override config values, and `--saveconfig` captures the effective state after all flags are applied — so `tbr -g=NKJV --saveconfig` saves BibleGateway + NKJV as your new defaults.
+
+## Setup wizard
+
+Run `tbr setup` for a guided configuration. It asks three questions, shows current values as defaults (just press Enter to keep them), displays a summary, and asks for confirmation before writing:
+
+```
+tbr setup — configure your Bible reading preferences
+-----------------------------------------------------
+
+Open BibleGateway.com for your daily reading?
+  (If no, ESV.org will open instead)
+  [Y/n]:
+
+Bible version for BibleGateway.com:
+  Common codes: KJV, NKJV, NIV, ESV, NLT, CSB, NASB
+  Tip: on BibleGateway.com open the version dropdown — the code
+  to enter here is shown in parentheses next to the version name.
+  [NKJV]:
+
+Open YouTube for the daily Bible video search?
+  [Y/n]:
+
+Settings to save:
+  open         = g (BibleGateway.com)
+  bibleversion = NKJV
+  youtube      = yes
+
+Save to ~/.verselumen? [Y/n]:
+```
 
 ## Config file (.verselumen)
 
